@@ -16,6 +16,8 @@ import { territoryView } from './views/territory-view';
 import { visitFormView } from './views/visit-form';
 import { appointmentSection, visitsSection } from './views/visits-section';
 import { visitsView } from './views/visits-view';
+import { productsSection, productsView } from './views/products-view';
+import { backupView, startBackupReminder } from './views/backup-view';
 
 /** Seiten-Fabriken je Route. Neue Seiten hier eintragen. */
 const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
@@ -31,11 +33,14 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
   visits: visitsView,
   'visit-new': visitFormView,
   'visit-edit': visitFormView,
+  products: productsView,
+  backup: backupView,
 };
 
 /** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
 registerDetailSection(appointmentSection);
 registerDetailSection(visitsSection);
+registerDetailSection(productsSection);
 
 /** Weitere Seiten (Besuche, Produkte, Backup) melden sich hier an. */
 export function registerPage(name: RouteName, factory: (r: Route) => View): void {
@@ -81,6 +86,7 @@ export function startApp(root: HTMLElement): void {
   setChildren(root, h('div', { class: 'app' }, bannerSlot, h('main', { class: 'app-main' }, mapSection, pageScroll), tabbar));
 
   const mapView = new MapView(mapSection);
+  startBackupReminder(bannerSlot);
   let current: View | null = null;
 
   function show(route: Route) {

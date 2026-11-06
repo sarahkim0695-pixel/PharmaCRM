@@ -93,12 +93,14 @@ class Store {
 
   async savePractices(list: Practice[], opts: { keepTimestamp?: boolean } = {}): Promise<Practice[]> {
     if (!list.length) return list;
-    const db = await getDb();
-    const tx = db.transaction('practices', 'readwrite');
     const ts = nowIso();
     const saved = list.map((p) => ({ ...p, updatedAt: opts.keepTimestamp ? p.updatedAt : ts }));
-    await Promise.all([...saved.map((p) => tx.store.put(p)), tx.done]);
+    // Erst im Arbeitsspeicher ändern (sofort sichtbar, keine verlorenen schnellen Taps) …
     saved.forEach((p) => this.practices.set(p.id, p));
+    // … dann dauerhaft speichern
+    const db = await getDb();
+    const tx = db.transaction('practices', 'readwrite');
+    await Promise.all([...saved.map((p) => tx.store.put(p)), tx.done]);
     await this.touch();
     this.emit('practices');
     return saved;
@@ -145,8 +147,9 @@ class Store {
 
   async saveVisit(v: Visit): Promise<Visit> {
     const saved = { ...v, updatedAt: nowIso() };
-    await (await getDb()).put('visits', saved);
     this.visits.set(saved.id, saved);
+    this.lastVisitCache = null;
+    await (await getDb()).put('visits', saved);
     await this.touch();
     this.emit('visits');
     return saved;
@@ -169,8 +172,8 @@ class Store {
 
   async saveProduct(p: Product): Promise<Product> {
     const saved = { ...p, updatedAt: nowIso() };
-    await (await getDb()).put('products', saved);
     this.products.set(saved.id, saved);
+    await (await getDb()).put('products', saved);
     await this.touch();
     this.emit('products');
     return saved;

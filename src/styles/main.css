@@ -57,7 +57,10 @@ h1, h2, h3 { line-height: 1.2; }
 .map { position: absolute; inset: 0; background: #e8ecef; }
 
 .app-banner:empty { display: none; }
-.app-banner { padding: calc(var(--safe-top) + 6px) 12px 6px; background: #fff8d6; border-bottom: 1px solid #f0d860; }
+.app-banner { padding: calc(var(--safe-top) + 6px) 12px 6px; background: #fff8d6; border-bottom: 1px solid #f0d860; z-index: 1000; }
+.banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 980px; margin: 0 auto; font-size: 15px; color: #4d3c00; }
+.banner .icon { flex: none; }
+@media (max-width: 600px) { .banner { gap: 6px; font-size: 14px; } .banner .btn-sm { padding: 0 10px; } }
 
 .tabbar {
   display: flex;
@@ -447,6 +450,21 @@ button.stat:disabled { opacity: 0.6; }
 .visit-note { margin-top: 4px; white-space: pre-wrap; }
 .card-title-row { display: inline; }
 .grid-2-even { grid-template-columns: 1fr 1fr; }
+
+/* ---------- Produkte ---------- */
+
+.add-row { display: flex; gap: 8px; align-items: center; }
+.add-row input { flex: 1; }
+.prow-btn { width: 100%; border: none; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.prow-btn > .icon:first-child { color: var(--primary); flex: none; }
+.prow-btn > .icon:last-child { color: #a3adbb; flex: none; }
+.product-states { list-style: none; margin: 0; padding: 0; }
+.product-states li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid #edf0f4; }
+.product-states li:first-child { border-top: none; }
+.segmented-sm { margin: 0; flex: 0 1 330px; }
+.segmented-sm .seg { min-height: 40px; font-size: 14px; }
+.seg-angeboten.on { background: #2f6fdb; color: #fff; }
+.seg-kauft.on { background: var(--ok); color: #fff; }
 
 /* ---------- Menü ---------- */
 

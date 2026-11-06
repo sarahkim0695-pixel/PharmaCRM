@@ -89,6 +89,7 @@ async function clearAll() {
   const sure = await confirmDialog({ title: 'Letzte Sicherheitsabfrage', message: 'Hast du ein aktuelles Backup? Danach ist alles weg.', confirmLabel: 'Ja, löschen', danger: true });
   if (!sure) return;
   await store.clearAll();
+  filterState.reset();
   toast('Alle Daten gelöscht');
   navigate('/karte');
 }

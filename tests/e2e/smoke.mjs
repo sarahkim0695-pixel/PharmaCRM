@@ -181,8 +181,69 @@ try {
   await page.getByRole('tab', { name: 'Verlauf' }).click();
   await page.waitForSelector('.visit-practice:has-text("Testpraxis Neu")');
 
+  // 12. Etappe 3: Produkte anlegen und bei einer Praxis eintragen
+  await page.goto(`${BASE}#/produkte`);
+  for (const name of ['Wundauflage A', 'Kompresse B']) {
+    await page.fill('.add-row input', name);
+    await page.getByRole('button', { name: 'Hinzufügen' }).click();
+    await page.waitForSelector(`.prow-title:has-text("${name}")`);
+  }
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', 'Testpraxis');
+  await page.waitForTimeout(400);
+  await page.locator('.prow', { hasText: 'Testpraxis Neu' }).click();
+  await page.locator('[aria-label="Wundauflage A"] .seg-kauft').click();
+  await page.locator('[aria-label="Kompresse B"] .seg-angeboten').click();
+  await page.waitForSelector('[aria-label="Wundauflage A"] .seg-kauft.on');
+  await page.waitForSelector('[aria-label="Kompresse B"] .seg-angeboten.on');
+  assert.match(await page.locator('.card-title', { hasText: 'Produkte' }).innerText(), /kauft 1 · angeboten 1/);
+  await shot('13-detail-produkte');
+  await page.goto(`${BASE}#/produkte`);
+  assert.match(await page.locator('.prow', { hasText: 'Wundauflage A' }).innerText(), /kauft: 1/);
+  await shot('14-produkte');
+
+  // 13. Etappe 4: Backup-Erinnerung, Export, alles löschen, Wiederherstellen
+  assert.ok(await page.locator('.banner', { hasText: 'Noch kein Backup.' }).isVisible(), 'Backup-Erinnerung fehlt');
+  await page.goto(`${BASE}#/backup`);
+  await shot('15-backup');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Backup jetzt erstellen' }).click()]);
+  const backupPath = join(shots ?? root, 'test-backup.json');
+  await download.saveAs(backupPath);
+  assert.match(download.suggestedFilename(), /^RepMap-Backup-\d{4}-\d{2}-\d{2}\.json$/);
+  const backup = JSON.parse((await import('node:fs')).readFileSync(backupPath, 'utf8'));
+  assert.equal(backup.practices.length, 10);
+  assert.equal(backup.products.length, 2);
+  await page.waitForSelector('.banner', { state: 'detached' });
+
+  await page.goto(`${BASE}#/mehr`);
+  await page.getByRole('button', { name: 'Alle Daten löschen' }).click();
+  await page.getByRole('button', { name: 'Alles löschen' }).click();
+  await page.getByRole('button', { name: 'Ja, löschen' }).click();
+  await page.waitForSelector('text=Willkommen bei RepMap');
+  await page.goto(`${BASE}#/liste`);
+  await page.waitForSelector('text=Noch keine Praxen');
+
+  await page.goto(`${BASE}#/backup`);
+  const [chooser2] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Backup-Datei wählen' }).click()]);
+  await chooser2.setFiles(backupPath);
+  await page.getByRole('button', { name: 'Wiederherstellen' }).click();
+  await page.waitForSelector('text=Backup wiederhergestellt');
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', '');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.prow').count(), 10);
+  await page.locator('.prow', { hasText: 'Testpraxis Neu' }).click();
+  await page.waitForSelector('[aria-label="Wundauflage A"] .seg-kauft.on');
+  await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
+  (await import('node:fs')).rmSync(backupPath);
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
+} catch (err) {
+  // Bildschirmfoto vom Fehlerzustand
+  const pages = browser?.contexts()[0]?.pages() ?? [];
+  if (pages[0]) await pages[0].screenshot({ path: join(shots ?? root, 'e2e-fehler.png') }).catch(() => {});
+  throw err;
 } finally {
   await browser?.close();
   server.kill();
