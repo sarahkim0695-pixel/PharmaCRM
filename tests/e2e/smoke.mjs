@@ -1,0 +1,165 @@
+/**
+ * End-to-End-Test im echten Browser (Chromium, iPad-Größe).
+ *
+ * Aufruf:  npm run build && npm run test:e2e
+ * Optional: REAL_GEOCODE=1 → echte Adresssuche bei Nominatim statt Testdaten.
+ *           SHOTS=pfad       → Bildschirmfotos in diesen Ordner schreiben.
+ *
+ * Braucht Playwright (npx playwright install chromium), ist aber nicht Teil von `npm test`.
+ */
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+
+const require = createRequire(import.meta.url);
+const { chromium, devices } = require('playwright');
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const fixture = join(root, 'tests/fixtures/Beispiel-Praxisliste.xlsx');
+const shots = process.env.SHOTS;
+if (shots) mkdirSync(shots, { recursive: true });
+const PORT = 4173;
+const BASE = `http://localhost:${PORT}/`;
+
+// Testdaten für die Adresssuche (statt echter Nominatim-Anfragen)
+const FAKE_COORDS = {
+  'marienplatz 8': [48.1374, 11.5755],
+  'leopoldstrasse 50': [48.1594, 11.5857],
+  'altstadt 315': [48.5372, 12.1522],
+  'rathausplatz 2|86150': [48.3689, 10.8986],
+  'residenzplatz 8': [48.5745, 13.4641],
+  'rathausplatz 2|85049': [48.7651, 11.4237],
+  'rathausplatz 22': [47.7286, 10.3158],
+  'konigstrasse 24': [47.8561, 12.1289],
+};
+
+function fakeNominatim(url) {
+  const u = new URL(url);
+  const street = (u.searchParams.get('street') ?? u.searchParams.get('q') ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+  const plz = u.searchParams.get('postalcode') ?? (u.searchParams.get('q')?.match(/\d{5}/)?.[0] ?? '');
+  for (const [key, [lat, lon]] of Object.entries(FAKE_COORDS)) {
+    const [s, p] = key.split('|');
+    if (street.includes(s) && (!p || p === plz)) {
+      return [{ lat: String(lat), lon: String(lon), display_name: `${key}, Testtreffer`, place_rank: 30, address: { postcode: plz } }];
+    }
+  }
+  return [];
+}
+
+async function waitForServer() {
+  for (let i = 0; i < 50; i++) {
+    try {
+      const r = await fetch(BASE);
+      if (r.ok) return;
+    } catch { /* noch nicht bereit */ }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error('Vorschau-Server startet nicht');
+}
+
+const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' });
+let browser;
+try {
+  await waitForServer();
+  browser = await chromium.launch();
+  const real = process.env.REAL_GEOCODE === '1';
+  const context = await browser.newContext({ ...devices['iPad (gen 7) landscape'], serviceWorkers: real ? 'allow' : 'block' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  if (!real) {
+    await page.route('https://nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeNominatim(route.request().url())) }),
+    );
+  }
+  const shot = async (name) => shots && page.screenshot({ path: join(shots, `${name}.png`) });
+
+  // 1. Start: leere Karte
+  await page.goto(BASE);
+  await page.waitForSelector('.leaflet-container');
+  await shot('01-start');
+
+  // 2. Gebiet per PLZ-Liste festlegen
+  await page.goto(`${BASE}#/gebiet`);
+  await page.fill('textarea', '80331, 80333, 80802, 84028, 86150, 94032\n85049');
+  await page.getByRole('button', { name: 'Hinzufügen' }).click();
+  await page.waitForSelector('text=7 PLZ übernommen');
+  assert.equal(await page.locator('.plz-chip').count(), 7);
+  assert.match(await page.locator('.plz-chip').first().innerText(), /80331\s+München/);
+  await shot('02-gebiet');
+
+  // 3. Excel importieren
+  await page.goto(`${BASE}#/import`);
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Excel-Datei auswählen' }).click()]);
+  await chooser.setFiles(fixture);
+  await page.waitForSelector('text=Vorschau');
+  const statsText = await page.locator('.stats').innerText();
+  assert.match(statsText, /9\s*Praxen in der Datei/);
+  assert.match(statsText, /4\s*gelb/);
+  await shot('03-import-vorschau');
+  await page.getByRole('button', { name: 'Importieren' }).click();
+  await page.waitForSelector('text=Import abgeschlossen');
+
+  // 4. Adresssuche abwarten (max. 1 Anfrage/Sekunde → einige Sekunden)
+  await page.getByRole('button', { name: 'Zur Karte' }).click();
+  await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: 90_000 });
+  await page.waitForTimeout(800);
+  const pins = await page.locator('.pin-wrap').count();
+  const clusters = await page.locator('.cluster').count();
+  assert.ok(pins + clusters >= 5, `zu wenige Pins: ${pins} + ${clusters} Cluster`);
+  await shot('04-karte-pins');
+
+  // 5. Pin antippen → Kurzinfo
+  await page.locator('.pin-wrap').first().click();
+  await page.waitForSelector('.popup');
+  assert.ok(await page.locator('.popup a', { hasText: 'Route' }).getAttribute('href').then((h) => h.startsWith('https://maps.apple.com/')));
+  await shot('05-popup');
+
+  // 6. Liste: Suche, Filter „prüfen“
+  await page.goto(`${BASE}#/liste`);
+  await page.waitForSelector('.prow');
+  assert.equal(await page.locator('.prow').count(), 9);
+  assert.equal(await page.locator('.prow .badge-review').count(), 4);
+  await page.fill('.search-input', 'passau');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.prow').count(), 1);
+  await page.fill('.search-input', '');
+  await page.waitForTimeout(400);
+  await shot('06-liste');
+
+  // 7. Nicht gefundene Praxis → Pin von Hand setzen
+  await page.locator('.prow', { hasText: 'Praxis Unbekannt' }).click();
+  await page.waitForSelector('text=Adresse wurde nicht gefunden');
+  await shot('07-detail-nicht-gefunden');
+  await page.getByRole('button', { name: 'Pin setzen' }).click();
+  await page.waitForSelector('.map-banner:not([hidden])');
+  const box = await page.locator('.map').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2 + 40);
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('text=Pin wurde von Hand gesetzt');
+  await shot('08-detail-pin-gesetzt');
+
+  // 8. Gebiet auf der Karte bearbeiten
+  await page.goto(`${BASE}#/karte/gebiet`);
+  await page.waitForSelector('text=Gebiet bearbeiten');
+  await page.waitForTimeout(500);
+  await shot('09-gebiet-bearbeiten');
+
+  // 9. Praxis anlegen
+  await page.goto(`${BASE}#/praxis/neu`);
+  await page.fill('input[name=name]', 'Testpraxis Neu');
+  await page.fill('input[name=street]', 'Marienplatz 8');
+  await page.fill('input[name=plz]', '80331');
+  await page.waitForTimeout(300);
+  assert.equal(await page.inputValue('input[name=city]'), 'München'); // Ort aus PLZ ergänzt
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('.detail-name:has-text("Testpraxis Neu")');
+
+  assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
+  console.log('✔ E2E-Test erfolgreich');
+} finally {
+  await browser?.close();
+  server.kill();
+}

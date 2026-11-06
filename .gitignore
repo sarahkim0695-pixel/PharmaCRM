@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dev-dist/
+scripts/.cache/
+*.log
+.DS_Store
+# Eigene Praxisdaten niemals ins (öffentliche) Repository!
+Praxisliste*.xlsx
+RepMap-Backup*.json
+test-results/
