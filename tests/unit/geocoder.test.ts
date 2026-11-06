@@ -30,6 +30,13 @@ describe('Adresssuche (Nominatim)', () => {
     expect(urls[0]).toContain('countrycodes=de');
   });
 
+  it('sucht im Kleinwalsertal auch in Österreich (deutsche PLZ)', async () => {
+    const { fn, urls } = fakeFetch([[hit(30, '6991')]]);
+    const r = await geocodeAddress({ street: 'Walserstraße 1', plz: '87567', city: 'Riezlern' }, fn);
+    expect(urls[0]).toContain('countrycodes=de,at');
+    expect(r.status).toBe('approx'); // österreichische PLZ im Ergebnis → bitte prüfen
+  });
+
   it('weicht auf Freitext aus und meldet „nicht gefunden“', async () => {
     const { fn, urls } = fakeFetch([[], []]);
     const r = await geocodeAddress(addr, fn);

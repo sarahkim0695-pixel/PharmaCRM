@@ -45,6 +45,8 @@ export function cleanStreet(street: string): string {
     .trim();
 }
 
+const AUSTRIAN_GERMAN_PLZ = new Set(['87567', '87568', '87569', '87491']);
+
 let lastRequest = 0;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,7 +86,10 @@ export async function geocodeAddress(
   fetchFn: FetchFn = (u) => fetch(u, { headers: { 'Accept-Language': 'de' } }),
 ): Promise<GeocodeResult> {
   const street = cleanStreet(p.street);
-  const common = 'format=jsonv2&limit=1&addressdetails=1&countrycodes=de&accept-language=de';
+  // Nur Deutschland – Ausnahme: deutsche PLZ auf österreichischem Gebiet
+  // (Kleinwalsertal 87567–87569, Jungholz 87491)
+  const countries = AUSTRIAN_GERMAN_PLZ.has(p.plz) ? 'de,at' : 'de';
+  const common = `format=jsonv2&limit=1&addressdetails=1&countrycodes=${countries}&accept-language=de`;
 
   // 1. Strukturierte Suche (Straße, PLZ, Ort getrennt) – am genauesten
   if (street) {

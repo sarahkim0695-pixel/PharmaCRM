@@ -65,6 +65,7 @@ export class MapView {
   private legendOpen = false;
   private queueStatus: QueueStatus | null = null;
   private visible = false;
+  private needsInitialView = false;
 
   constructor(container: HTMLElement) {
     const mapEl = h('div', { class: 'map' });
@@ -101,6 +102,9 @@ export class MapView {
     this.labelLayer.addTo(this.map);
 
     this.initialView();
+    // War die Karte beim Start unsichtbar (z. B. App auf der Liste geöffnet),
+    // stimmt der berechnete Ausschnitt nicht – beim ersten Anzeigen neu setzen.
+    this.needsInitialView = container.offsetWidth === 0;
     this.buildOverlay();
 
     this.map.on('moveend', () => {
@@ -138,7 +142,13 @@ export class MapView {
   show(): void {
     this.visible = true;
     // Leaflet muss die Größe neu messen, wenn die Karte wieder sichtbar wird
-    requestAnimationFrame(() => this.map.invalidateSize());
+    requestAnimationFrame(() => {
+      this.map.invalidateSize();
+      if (this.needsInitialView) {
+        this.needsInitialView = false;
+        this.initialView();
+      }
+    });
   }
 
   hide(): void {
