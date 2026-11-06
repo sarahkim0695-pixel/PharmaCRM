@@ -33,6 +33,8 @@ export function toast(message: string, opts: ToastOptions = {}): void {
       ),
   );
   container.append(el);
+  // höchstens zwei Meldungen gleichzeitig
+  while (container.children.length > 2) container.firstElementChild?.remove();
   setTimeout(() => el.classList.add('leaving'), (opts.duration ?? (opts.action ? 6000 : 3000)) - 300);
   setTimeout(() => el.remove(), opts.duration ?? (opts.action ? 6000 : 3000));
 }

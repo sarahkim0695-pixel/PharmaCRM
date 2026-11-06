@@ -157,6 +157,30 @@ try {
   await page.getByRole('button', { name: 'Speichern' }).click();
   await page.waitForSelector('.detail-name:has-text("Testpraxis Neu")');
 
+  // 10. Etappe 2: Besuch erfassen mit nächstem Termin
+  await page.getByRole('button', { name: 'Besuch erfassen' }).click();
+  await page.waitForSelector('text=Besuch erfassen');
+  const inThreeDays = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  await page.fill('input[list=dl-contacts]', 'Dr. Test');
+  await page.fill('textarea', 'Produkt vorgestellt, Muster dagelassen.');
+  await page.locator('input[type=date]').nth(1).fill(inThreeDays);
+  await page.locator('input[type=time]').fill('14:30');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
+  await page.waitForSelector('.appt-date');
+  await shot('10-detail-besuch');
+
+  // 11. Übersicht Besuche
+  await page.goto(`${BASE}#/besuche`);
+  await page.waitForSelector('.prow:has-text("Testpraxis Neu")'); // Tab „Termine“
+  assert.match(await page.locator('.appt-side').first().innerText(), /14:30/);
+  await shot('11-besuche-termine');
+  await page.getByRole('tab', { name: 'Lange nicht besucht' }).click();
+  assert.equal(await page.locator('.plist .prow').count(), 9); // alle außer der gerade besuchten
+  await shot('12-besuche-lange');
+  await page.getByRole('tab', { name: 'Verlauf' }).click();
+  await page.waitForSelector('.visit-practice:has-text("Testpraxis Neu")');
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } finally {

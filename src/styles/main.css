@@ -399,6 +399,55 @@ button.stat:disabled { opacity: 0.6; }
 .detail-hint p { margin: 2px 0 0; white-space: pre-wrap; }
 .danger-zone { margin: 28px 0 12px; text-align: center; }
 
+/* ---------- Besuche & Termine ---------- */
+
+.segmented {
+  display: flex;
+  background: #e3e8ef;
+  border-radius: 12px;
+  padding: 3px;
+  margin: 8px 0 14px;
+  gap: 3px;
+}
+.seg {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg.on { background: #fff; color: var(--text); box-shadow: var(--shadow); }
+.appt { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--primary-soft); margin-bottom: 12px; color: var(--primary-dark); }
+.appt-date { font-weight: 700; font-size: 18px; color: var(--text); }
+.appt-note { margin-top: 2px; color: var(--text); }
+.appt-overdue { background: #fff3e2; color: var(--warn); }
+.appt-warn { font-size: 14px; color: var(--warn); }
+.appt-side { display: flex; flex-direction: column; align-items: flex-end; color: var(--text); }
+.appt-side.overdue { color: var(--warn); }
+.stale-days { display: flex; flex-direction: column; align-items: flex-end; }
+.stale-days b { color: var(--text); font-size: 15px; }
+.prow-extra { font-size: 14px; color: var(--primary-dark); margin-top: 2px; }
+.prow-side .muted, .prow-side span { white-space: nowrap; }
+.list-actions { margin: 10px 0 8px; }
+.visit-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.visit {
+  display: block;
+  padding: 12px 0;
+  border-top: 1px solid #edf0f4;
+  color: inherit;
+  text-decoration: none;
+}
+.visit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.visit-practice { font-weight: 600; color: var(--primary-dark); }
+.visit-contact { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 15px; margin-top: 2px; }
+.visit-note { margin-top: 4px; white-space: pre-wrap; }
+.card-title-row { display: inline; }
+.grid-2-even { grid-template-columns: 1fr 1fr; }
+
 /* ---------- Menü ---------- */
 
 .menu { padding: 4px 16px; }

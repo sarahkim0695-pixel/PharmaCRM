@@ -10,9 +10,12 @@ import type { View } from './views/common';
 import { importView } from './views/import-view';
 import { listView } from './views/list-view';
 import { helpView, moreView, settingsView } from './views/more-view';
-import { practiceView } from './views/practice-detail';
+import { practiceView, registerDetailSection } from './views/practice-detail';
 import { practiceFormView } from './views/practice-form';
 import { territoryView } from './views/territory-view';
+import { visitFormView } from './views/visit-form';
+import { appointmentSection, visitsSection } from './views/visits-section';
+import { visitsView } from './views/visits-view';
 
 /** Seiten-Fabriken je Route. Neue Seiten hier eintragen. */
 const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
@@ -25,7 +28,14 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
   import: importView,
   settings: settingsView,
   help: helpView,
+  visits: visitsView,
+  'visit-new': visitFormView,
+  'visit-edit': visitFormView,
 };
+
+/** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
+registerDetailSection(appointmentSection);
+registerDetailSection(visitsSection);
 
 /** Weitere Seiten (Besuche, Produkte, Backup) melden sich hier an. */
 export function registerPage(name: RouteName, factory: (r: Route) => View): void {
