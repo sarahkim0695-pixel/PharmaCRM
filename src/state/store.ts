@@ -7,24 +7,45 @@
  */
 import { getDb } from '../db/database';
 import { DEFAULT_TERRITORY_PLZ } from '../data/territory';
-import type { BackupFile, PlzFeature, Practice, Product, Settings, Visit } from '../types';
+import type { BackupFile, PlzFeature, Practice, Product, Settings, Tour, TourDefaults, Visit } from '../types';
 import { nowIso } from '../utils/id';
 
-export type ChangeKind = 'practices' | 'visits' | 'products' | 'settings' | 'shapes' | 'territory';
+export type ChangeKind = 'practices' | 'visits' | 'products' | 'settings' | 'shapes' | 'territory' | 'tours';
 type Listener = (kinds: Set<ChangeKind>) => void;
+
+export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
+  dayStart: 8 * 60, // 08:00
+  dayEnd: 17 * 60 + 30, // 17:30
+  returnHome: true,
+  lunchEnabled: true,
+  lunchFrom: 12 * 60, // Pause frühestens ab 12:00 …
+  lunchTo: 14 * 60, // … und bis 14:00 beendet
+  lunchMinutes: 45,
+  parkMinutes: 5,
+  visitMinutes: 15,
+  trafficPercent: 15,
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   territoryPlz: [...DEFAULT_TERRITORY_PLZ],
   statusColors: {},
   staleDays: 90,
   backupReminderDays: 7,
+  tourDefaults: { ...DEFAULT_TOUR_SETTINGS },
 };
+
+/** Gespeicherte Einstellungen mit Standardwerten ergänzen (auch für neue Felder). */
+export function withDefaults(saved: Partial<Settings> | undefined): Settings {
+  const base = structuredClone(DEFAULT_SETTINGS);
+  return { ...base, ...(saved ?? {}), tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) } };
+}
 
 class Store {
   practices = new Map<string, Practice>();
   visits = new Map<string, Visit>();
   products = new Map<string, Product>();
   extraShapes = new Map<string, PlzFeature>();
+  tours = new Map<string, Tour>();
   settings: Settings = structuredClone(DEFAULT_SETTINGS);
   loaded = false;
 
@@ -36,21 +57,23 @@ class Store {
 
   async load(): Promise<void> {
     const db = await getDb();
-    const [practices, visits, products, shapes, settings] = await Promise.all([
+    const [practices, visits, products, shapes, tours, settings] = await Promise.all([
       db.getAll('practices'),
       db.getAll('visits'),
       db.getAll('products'),
       db.getAll('plzShapes'),
+      db.getAll('tours'),
       db.get('meta', 'settings') as Promise<Partial<Settings> | undefined>,
     ]);
     this.practices = new Map(practices.map((p) => [p.id, p]));
     this.visits = new Map(visits.map((v) => [v.id, v]));
     this.products = new Map(products.map((p) => [p.id, p]));
     this.extraShapes = new Map(shapes.map((s) => [s.properties.plz, s]));
-    this.settings = { ...structuredClone(DEFAULT_SETTINGS), ...(settings ?? {}) };
+    this.tours = new Map(tours.map((t) => [t.id, t]));
+    this.settings = withDefaults(settings);
     this.lastVisitCache = null;
     this.loaded = true;
-    this.emit('practices', 'visits', 'products', 'settings', 'shapes', 'territory');
+    this.emit('practices', 'visits', 'products', 'settings', 'shapes', 'territory', 'tours');
   }
 
   subscribe(fn: Listener): () => void {
@@ -223,6 +246,24 @@ class Store {
     this.emit('shapes');
   }
 
+  // ---------- Touren ----------
+
+  async saveTour(t: Tour): Promise<Tour> {
+    const saved = { ...t, updatedAt: nowIso() };
+    this.tours.set(saved.id, saved);
+    await (await getDb()).put('tours', saved);
+    await this.touch();
+    this.emit('tours');
+    return saved;
+  }
+
+  async deleteTour(id: string): Promise<void> {
+    this.tours.delete(id);
+    await (await getDb()).delete('tours', id);
+    await this.touch();
+    this.emit('tours');
+  }
+
   // ---------- Backup ----------
 
   toBackup(): BackupFile {
@@ -235,22 +276,23 @@ class Store {
       products: [...this.products.values()],
       settings: this.settings,
       extraPlzShapes: [...this.extraShapes.values()],
+      tours: [...this.tours.values()],
     };
   }
 
   /** Ersetzt ALLE Daten durch den Inhalt einer Backup-Datei. */
   async restoreBackup(b: BackupFile): Promise<void> {
     const db = await getDb();
-    const tx = db.transaction(['practices', 'visits', 'products', 'meta', 'plzShapes'], 'readwrite');
+    const tx = db.transaction(['practices', 'visits', 'products', 'meta', 'plzShapes', 'tours'], 'readwrite');
     await Promise.all([
       tx.objectStore('practices').clear(),
       tx.objectStore('visits').clear(),
       tx.objectStore('products').clear(),
       tx.objectStore('plzShapes').clear(),
+      tx.objectStore('tours').clear(),
     ]);
     const settings: Settings = {
-      ...structuredClone(DEFAULT_SETTINGS),
-      ...b.settings,
+      ...withDefaults(b.settings),
       lastBackupAt: nowIso(), // wiederhergestellter Stand ist ja gesichert
       backupSnoozeUntil: undefined,
     };
@@ -259,6 +301,7 @@ class Store {
       ...b.visits.map((v) => tx.objectStore('visits').put(v)),
       ...b.products.map((p) => tx.objectStore('products').put(p)),
       ...(b.extraPlzShapes ?? []).map((s) => tx.objectStore('plzShapes').put(s)),
+      ...(b.tours ?? []).map((t) => tx.objectStore('tours').put(t)),
       tx.objectStore('meta').put(settings, 'settings'),
       tx.done,
     ]);
@@ -269,7 +312,7 @@ class Store {
   async clearAll(): Promise<void> {
     const db = await getDb();
     const tx = db.transaction(
-      ['practices', 'visits', 'products', 'meta', 'plzShapes', 'geocodeCache'],
+      ['practices', 'visits', 'products', 'meta', 'plzShapes', 'geocodeCache', 'tours'],
       'readwrite',
     );
     await Promise.all([
@@ -279,6 +322,7 @@ class Store {
       tx.objectStore('meta').clear(),
       tx.objectStore('plzShapes').clear(),
       tx.objectStore('geocodeCache').clear(),
+      tx.objectStore('tours').clear(),
       tx.done,
     ]);
     await this.load();

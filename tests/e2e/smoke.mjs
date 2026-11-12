@@ -4,6 +4,7 @@
  * Aufruf:  npm run build && npm run test:e2e
  * Optional: REAL_GEOCODE=1 → echte Adresssuche bei Nominatim statt Testdaten.
  *           SHOTS=pfad       → Bildschirmfotos in diesen Ordner schreiben.
+ *           DEVICE='iPhone 13' → anderes Gerät (Standard: iPad quer).
  *
  * Braucht Playwright (npx playwright install chromium), ist aber nicht Teil von `npm test`.
  */
@@ -20,6 +21,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = join(root, 'tests/fixtures/Beispiel-Praxisliste.xlsx');
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
+/** Arbeitsdateien des Tests (wird von git ignoriert) */
+const outDir = shots ?? join(root, 'test-results');
+mkdirSync(outDir, { recursive: true });
 const PORT = 4173;
 const BASE = `http://localhost:${PORT}/`;
 
@@ -33,7 +37,24 @@ const FAKE_COORDS = {
   'rathausplatz 2|85049': [48.7651, 11.4237],
   'rathausplatz 22': [47.7286, 10.3158],
   'konigstrasse 24': [47.8561, 12.1289],
+  'karlsplatz 1': [48.1390, 11.5655],
 };
+
+/** Falscher Routing-Server: Fahrzeit aus Luftlinie (wie die Schätzung in der App) */
+function fakeOsrm(url) {
+  const coords = decodeURIComponent(url.split('/driving/')[1].split('?')[0]).split(';').map((c) => c.split(',').map(Number));
+  const est = ([lng1, lat1], [lng2, lat2]) => {
+    const R = 6371, rad = Math.PI / 180;
+    const s = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lng2 - lng1) * rad) / 2) ** 2;
+    const km = 2 * R * Math.asin(Math.sqrt(s)) * 1.3;
+    const speed = km < 5 ? 25 : km < 20 ? 40 : km < 50 ? 60 : 75;
+    return { sec: km < 0.05 ? 0 : ((km / speed) * 60 + 3) * 60, m: km * 1000 };
+  };
+  if (url.includes('/table/')) {
+    return { code: 'Ok', durations: coords.map((a) => coords.map((b) => est(a, b).sec)), distances: coords.map((a) => coords.map((b) => est(a, b).m)) };
+  }
+  return { code: 'Ok', routes: [{ geometry: { coordinates: coords } }] };
+}
 
 function fakeNominatim(url) {
   const u = new URL(url);
@@ -65,11 +86,29 @@ try {
   await waitForServer();
   browser = await chromium.launch();
   const real = process.env.REAL_GEOCODE === '1';
-  const context = await browser.newContext({ ...devices['iPad (gen 7) landscape'], serviceWorkers: real ? 'allow' : 'block' });
+  const context = await browser.newContext({ ...devices[process.env.DEVICE ?? 'iPad (gen 7) landscape'], serviceWorkers: real ? 'allow' : 'block' });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (real) {
+    // Manche Firmen-/Test-Proxys blockieren „;“ im Pfad (OSRM-Format). Dann die echte Anfrage über curl stellen.
+    await page.route('https://routing.openstreetmap.de/**', async (route) => {
+      const { execFileSync } = await import('node:child_process');
+      let body = '';
+      for (let attempt = 1; attempt <= 4 && !body; attempt++) {
+        try {
+          body = execFileSync('curl', ['-sS', '-m', '30', route.request().url()], { encoding: 'utf8' });
+        } catch {
+          await new Promise((r) => setTimeout(r, attempt * 2000)); // Netz der Testumgebung wackelt manchmal
+        }
+      }
+      await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body });
+    });
+  }
   if (!real) {
+    await page.route('https://routing.openstreetmap.de/**', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeOsrm(route.request().url())) }),
+    );
     await page.route('https://nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeNominatim(route.request().url())) }),
     );
@@ -104,7 +143,7 @@ try {
 
   // 4. Adresssuche abwarten (max. 1 Anfrage/Sekunde → einige Sekunden)
   await page.getByRole('button', { name: 'Zur Karte' }).click();
-  await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: 90_000 });
+  await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: real ? 240_000 : 90_000 });
   await page.waitForTimeout(800);
   const pins = await page.locator('.pin-wrap').count();
   const clusters = await page.locator('.cluster').count();
@@ -207,7 +246,7 @@ try {
   await page.goto(`${BASE}#/backup`);
   await shot('15-backup');
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Backup jetzt erstellen' }).click()]);
-  const backupPath = join(shots ?? root, 'test-backup.json');
+  const backupPath = join(outDir, 'test-backup.json');
   await download.saveAs(backupPath);
   assert.match(download.suggestedFilename(), /^RepMap-Backup-\d{4}-\d{2}-\d{2}\.json$/);
   const backup = JSON.parse((await import('node:fs')).readFileSync(backupPath, 'utf8'));
@@ -237,12 +276,62 @@ try {
   await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
   (await import('node:fs')).rmSync(backupPath);
 
+  // 14. Öffnungszeiten aus der Excel in der Praxis-Ansicht
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', 'Anna');
+  await page.waitForTimeout(400);
+  await page.locator('.prow', { hasText: 'Anna Beispiel' }).click();
+  await page.waitForSelector('.hours-table');
+  assert.match(await page.locator('.hours-table').innerText(), /Mo\s+08:00–12:00, 14:00–18:00/);
+  assert.match(await page.locator('.duration-row').innerText(), /10 min[\s\S]*Parken[\s\S]*20 min[\s\S]*vor Ort/);
+  await shot('16-detail-oeffnungszeiten');
+  await page.fill('.search-input', '').catch(() => {});
+
+  // 15. Tourplanung: Startadresse festlegen
+  await page.goto(`${BASE}#/einstellungen`);
+  await page.fill('input[autocomplete="street-address"]', 'Karlsplatz 1, 80335 München');
+  await page.getByRole('button', { name: 'Suchen & speichern' }).click();
+  await page.waitForSelector('text=Startadresse gespeichert');
+
+  // 16. Tour für den nächsten Dienstag planen
+  const d = new Date();
+  do d.setDate(d.getDate() + 1); while (d.getDay() !== 2);
+  const tuesday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  await page.waitForSelector('text=Noch keine Praxen');
+  await page.getByRole('button', { name: 'Praxen auswählen' }).click();
+  await page.waitForSelector('.pick');
+  const picks = page.locator('.pick:not(.already)');
+  for (let i = 0; i < 6; i++) await picks.nth(i).click();
+  await page.getByRole('button', { name: /Übernehmen \(6\)/ }).click();
+  assert.equal(await page.locator('.stop').count(), 6);
+  await page.getByRole('button', { name: 'Tour berechnen' }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  const visitsPlanned = await page.locator('.tl-visit').count();
+  assert.ok(visitsPlanned >= 4, `nur ${visitsPlanned} Besuche eingeplant`);
+  assert.ok(await page.locator('.tl-break').count() === 1, 'Mittagspause fehlt');
+  assert.match(await page.locator('.tl-point').first().innerText(), /Abfahrt Zuhause/);
+  assert.equal(await page.locator('text=Fahrzeiten nur geschätzt').count(), 0, 'Routing-Server nicht erreicht');
+  await shot('17-tour-plan');
+  if (shots) await page.locator('.timeline').screenshot({ path: join(shots, '18-tour-zeitplan.png') }).catch(() => {});
+
+  // 17. Tour auf der Karte
+  await page.getByRole('button', { name: 'Auf Karte zeigen' }).click();
+  await page.waitForSelector('.tour-pin');
+  assert.equal(await page.locator('.tour-pin').count(), visitsPlanned);
+  await page.waitForTimeout(600);
+  await shot('19-tour-karte');
+
+  // 18. „Zur Tour“ aus der Kurzinfo einer Praxis
+  await page.goto(`${BASE}#/karte`);
+  await page.waitForTimeout(500);
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } catch (err) {
   // Bildschirmfoto vom Fehlerzustand
   const pages = browser?.contexts()[0]?.pages() ?? [];
-  if (pages[0]) await pages[0].screenshot({ path: join(shots ?? root, 'e2e-fehler.png') }).catch(() => {});
+  if (pages[0]) await pages[0].screenshot({ path: join(outDir, 'e2e-fehler.png') }).catch(() => {});
   throw err;
 } finally {
   await browser?.close();

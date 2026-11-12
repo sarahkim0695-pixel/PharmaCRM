@@ -10,6 +10,7 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { appleMapsUrl, fullAddress, telUrl } from '../utils/maps';
 import { emptyState, pageHeader, section, type View } from './common';
+import { addPracticeToTour } from './tour-view';
 
 /**
  * Weitere Abschnitte (Termine, Besuche, Produkte) melden sich hier an,
@@ -72,7 +73,12 @@ function headCard(p: Practice): HTMLElement {
       'div',
       { class: 'detail-address' },
       h('div', null, h('div', null, p.street || h('span', { class: 'muted' }, 'keine Straße')), h('div', null, `${p.plz} ${p.city}`.trim())),
-      h('a', { class: 'btn btn-primary', href: appleMapsUrl(p), target: '_blank', rel: 'noopener' }, iconEl('route', 20), 'Route'),
+      h(
+        'div',
+        { class: 'detail-buttons' },
+        h('a', { class: 'btn btn-primary', href: appleMapsUrl(p), target: '_blank', rel: 'noopener' }, iconEl('route', 20), 'Route'),
+        h('button', { class: 'btn', onclick: () => void addPracticeToTour(p.id) }, iconEl('plus', 20), 'Zur Tour'),
+      ),
     ),
     p.phone && h('a', { class: 'detail-phone', href: telUrl(p.phone) }, iconEl('phone', 18), p.phone),
     p.hint && h('div', { class: 'detail-hint' }, h('span', { class: 'field-label' }, 'Hinweis'), h('p', null, p.hint)),

@@ -11,6 +11,8 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. |
 | 📝 **Besuche** | Besuche mit Datum, Ansprechpartner und Notiz. Nächster Termin. Übersicht „Termine“, „lange nicht besucht“, „Verlauf“. |
 | 📦 **Produkte** | Eigene Produktliste. Pro Praxis: „angeboten“ oder „kauft“. |
+| 🕘 **Öffnungszeiten** | Aus der Excel oder in der App: Öffnungszeiten je Wochentag und Zeitaufwand pro Praxis (Parken & Weg, vor Ort). |
+| 🚗 **Tourplanung** | Optimierte Tagestour mit Uhrzeiten: beachtet Öffnungszeiten, Termine, Fahrzeiten, deine Mittagspause und den Feierabend. |
 | 🛡️ **Backup** | Alle Daten als Datei sichern und wiederherstellen. Erinnerung, wenn ein Backup fällig ist. |
 
 ---
@@ -67,6 +69,7 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 | Praxis Dr. Muster | Allgemeinmedizin | Hauptstr. 5 | 80331 | München | Kunde | … |
 
 - Eine Spalte **Telefon** wird zusätzlich übernommen, wenn vorhanden.
+- Für die **Tourplanung** (alles optional – siehe nächster Abschnitt): **Öffnungszeiten**, **Parken (Min)**, **Vor Ort (Min)**.
 - **Gelb hinterlegte Zeilen** (auch hellgelb oder goldgelb, ganze Zeile oder einzelne Zelle) werden als **„prüfen“** markiert.
   In der Praxis-Ansicht kannst du sie später mit **„Geprüft“** bestätigen.
 - Die Datei muss im Format **.xlsx** sein (in Excel: *Speichern unter → Excel-Arbeitsmappe*).
@@ -76,7 +79,47 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 Nach dem Import sucht die App die Adressen auf der Karte (über OpenStreetMap, **höchstens 1 Adresse pro Sekunde** – bei 300 Praxen also ca. 5–10 Minuten). Lass die App dabei geöffnet; sonst macht sie beim nächsten Öffnen weiter.
 Nicht gefundene Adressen findest du unter **Mehr → Adresssuche** oder in der Liste mit dem Filter „Standort fehlt oder ungenau“. Dort tippst du auf **„Pin setzen“** und dann auf die richtige Stelle in der Karte.
 
-### Schritt 5: Backup – regelmäßig!
+#### Öffnungszeiten und Zeitaufwand in der Excel
+
+Füge einfach zusätzliche Spalten hinzu (Reihenfolge egal):
+
+| Öffnungszeiten | Parken (Min) | Vor Ort (Min) |
+| --- | --- | --- |
+| Mo-Fr 8-12, Mo Di Do 14-18 | 10 | 20 |
+| Mo-Do 8-17, Fr 8-13 | | 15 |
+| Mo-Fr 8-12 und 15-18; Mi nachmittag geschlossen | 5 | |
+
+So darfst du die Öffnungszeiten schreiben – die App versteht viele Varianten:
+
+- Tage: `Mo`, `Di`, `Mi`, `Do`, `Fr`, `Sa`, `So` (auch ausgeschrieben), Bereiche wie `Mo-Fr`, Listen wie `Mo, Di, Do`
+- Zeiten: `8-12`, `08:00-12:00`, `8.30 - 12.30 Uhr`, mehrere mit „und“ oder Komma: `8-12 und 14-18`
+- Mehrere Angaben hintereinander: `Mo-Fr 8-12, Mo Di Do 14-18` (vormittags täglich, nachmittags Mo/Di/Do)
+- Ausnahmen: `Mi nachmittag geschlossen`, `Fr geschlossen`
+- Tage ohne Angabe gelten als geschlossen. Ohne Tagesangabe (z. B. nur `8-12`) gilt Mo–Fr.
+
+**Alternativ** eine Spalte je Wochentag mit den Überschriften `Mo`, `Di`, `Mi`, `Do`, `Fr` (ggf. `Sa`) und Inhalten wie `8-12, 14-18` oder `geschlossen`.
+
+Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht lesbare Angaben (z. B. „nach Vereinbarung“) zeigt die Import-Vorschau an – die trägst du dann in der App nach (Praxis öffnen → **Öffnungszeiten & Zeitaufwand → Bearbeiten**).
+
+**Parken (Min)** = Zeit für Parkplatzsuche und Fußweg, **Vor Ort (Min)** = Aufenthalt in der Praxis. Leer = Standardwert (einstellbar unter *Mehr → Einstellungen → Tourplanung*, anfangs 5 und 15 Minuten).
+
+### Schritt 5: Touren planen
+
+1. Einmalig: **Mehr → Einstellungen → Tourplanung** → deine **Startadresse** eintragen und „Suchen & speichern“. Dort stellst du auch Arbeitszeit, Mittagspause (z. B. 45 Minuten irgendwann zwischen 12 und 14 Uhr) und den Standard-Zeitaufwand ein.
+2. Tab **Tour** → Tag wählen → **Praxen auswählen** (sortiert nach Entfernung; Filter „an dem Tag geöffnet“, „lange nicht besucht“, „im Gebiet“).
+   Praxen kannst du auch direkt auf der Karte (Kurzinfo → **Tour**) oder in der Praxis-Ansicht (**Zur Tour**) hinzufügen. Praxen mit einem Termin an diesem Tag kommen automatisch dazu.
+3. **Tour berechnen** – die App sucht die beste Reihenfolge und zeigt den Tagesplan mit Uhrzeiten: Abfahrt, Fahrt, Ankunft, Parken & Weg, Besuch, Mittagspause, Rückkehr.
+   - Sie fährt so spät los, dass du morgens nicht vor verschlossener Tür wartest.
+   - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
+   - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
+4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
+5. **Lücke füllen / Vorschläge in der Nähe**: Entsteht eine Wartezeit, schlägt die App passende Praxen in der Nähe vor (an dem Tag geöffnet, länger nicht besucht).
+6. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
+7. **Auf Karte zeigen**: nummerierte Stopps und Strecke. **Ganze Route (Google Maps)** öffnet alle Stopps auf einmal (bis 9 Zwischenstopps).
+
+Die Fahrzeiten kommen vom kostenlosen OpenStreetMap-Routing (inkl. einstellbarem Verkehrszuschlag, Standard 15 %). Ohne Internet schätzt die App sie grob und weist darauf hin.
+
+### Schritt 6: Backup – regelmäßig!
 
 Weil alle Daten nur auf deinem iPad liegen, ist ein Backup sehr wichtig:
 
@@ -87,8 +130,8 @@ Wiederherstellen: **Mehr → Backup → Backup-Datei wählen**.
 
 ### Gut zu wissen
 
-- **Offline:** Karte (bereits angesehene Ausschnitte), Gebiet, Pins, Liste, Besuche und Produkte funktionieren ohne Internet. Adresssuche und neue Kartenausschnitte brauchen Internet.
-- **Datenschutz:** Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap geschickt – keine Praxisnamen, keine Notizen.
+- **Offline:** Karte (bereits angesehene Ausschnitte), Gebiet, Pins, Liste, Besuche, Produkte und berechnete Touren funktionieren ohne Internet. Adresssuche, genaue Fahrzeiten und neue Kartenausschnitte brauchen Internet.
+- **Datenschutz:** Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap geschickt, für die Fahrzeiten nur Koordinaten – keine Praxisnamen, keine Notizen.
 - **Dein Repository ist öffentlich.** Der Programmcode ist für alle sichtbar – deine Daten aber nicht, die liegen nur auf deinem Gerät.
   **Lade deine Excel-Datei und Backup-Dateien deshalb nie ins Repository hoch.**
 - Die Datei `tests/fixtures/Beispiel-Praxisliste.xlsx` enthält **erfundene** Praxen zum Ausprobieren.
@@ -136,6 +179,10 @@ src/
   import/practice-import.ts  Spalten erkennen, Zeilen lesen, mit vorhandenen Praxen zusammenführen
   geo/geocoder.ts         Adresssuche (Nominatim) mit Warteschlange, 1 Anfrage/s, Zwischenspeicher
   geo/plz-data.ts         PLZ-Flächen laden, fehlende über Overpass nachladen
+  tour/opening-hours.ts   Öffnungszeiten lesen („Mo-Fr 8-12, Mo Di Do 14-18“), anzeigen, abfragen
+  tour/optimizer.ts       Tour-Optimierung (Zeitfenster, Pause, Feierabend) – reine Rechenlogik
+  tour/planner.ts         Tagesplan: Praxen + Öffnungszeiten + Fahrzeiten → Optimierer → Uhrzeiten
+  tour/travel.ts          Fahrzeiten/Strecke (OSRM-Routing der FOSSGIS, sonst Schätzung)
   geo/osm.ts              Overpass-Antwort → GeoJSON (Ringe zusammensetzen, nur Deutschland)
   map/map-view.ts         Karte: Gebiet, Pins, Bedienelemente, Gebiet bearbeiten, Pin setzen
   map/popup.ts            Kurzinfo beim Antippen eines Pins
@@ -148,7 +195,7 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 
@@ -179,6 +226,7 @@ Weitere Regierungsbezirke: Liste `REGIONS` in `scripts/fetch-plz.ts` erweitern.
 | tile.openstreetmap.org | Kartenkacheln | [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) – kein massenhaftes Vorladen |
 | nominatim.openstreetmap.org | Adresssuche | [Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/) – max. 1 Anfrage/s, Ergebnisse speichern |
 | overpass-api.de | PLZ-Flächen | nur einmalig/bei Bedarf, kleine Abfragen |
+| routing.openstreetmap.de | Fahrzeiten & Strecke für Touren (OSRM, FOSSGIS) | [Nutzungsregeln](https://routing.openstreetmap.de/about.html): Quellenangabe + Link „Karte verbessern“, max. 1 Anfrage/s, keine Massenabfragen – pro Tourberechnung 2 Anfragen |
 
 Kartendaten © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende, ODbL.
 

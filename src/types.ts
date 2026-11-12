@@ -35,10 +35,26 @@ export interface Practice {
   nextAppointmentNote?: string;
   /** Produkt-ID → Zustand */
   products: Record<string, ProductState>;
+  /** Öffnungszeiten (undefined = unbekannt) */
+  openingHours?: WeekHours;
+  /** Öffnungszeiten als Text, wie in Excel/Schnelleingabe geschrieben */
+  openingText?: string;
+  /** Zeitaufwand in Minuten (leer = Standard aus den Einstellungen) */
+  parkMinutes?: number; // Parken & Fußweg
+  visitMinutes?: number; // Aufenthalt vor Ort
   source: 'import' | 'manual';
   createdAt: string;
   updatedAt: string;
 }
+
+/** Zeitfenster in Minuten seit Mitternacht, z. B. 8:00–12:00 = { from: 480, to: 720 } */
+export interface TimeRange {
+  from: number;
+  to: number;
+}
+
+/** Öffnungszeiten je Wochentag: Index 0 = Montag … 6 = Sonntag */
+export type WeekHours = TimeRange[][];
 
 export interface Visit {
   id: string;
@@ -80,8 +96,77 @@ export interface Settings {
   /** Zeitpunkt der letzten Datenänderung (für die Backup-Erinnerung) */
   lastChangeAt?: string;
   mapView?: MapViewState;
+  /** Startadresse für Touren („Zuhause“) */
+  home?: { address: string; lat: number; lng: number };
+  /** Vorgaben für neue Touren */
+  tourDefaults: TourDefaults;
+  /** Datum der Tour, die gerade geplant wird (für „Zur Tour hinzufügen“) */
+  activeTourDate?: string;
   /** Wurde der Willkommens-Hinweis schon gezeigt? */
   onboardingDone?: boolean;
+}
+
+export interface TourDefaults {
+  dayStart: number; // Abfahrt frühestens (Minuten seit Mitternacht)
+  dayEnd: number; // Feierabend spätestens
+  returnHome: boolean;
+  lunchEnabled: boolean;
+  lunchFrom: number; // Mittagspause frühestens ab …
+  lunchTo: number; // … und spätestens zu Ende um
+  lunchMinutes: number;
+  parkMinutes: number; // Standard: Parken & Fußweg
+  visitMinutes: number; // Standard: Aufenthalt vor Ort
+  trafficPercent: number; // Zuschlag auf die berechneten Fahrzeiten
+}
+
+// ---------- Tourplanung ----------
+
+export interface TourStop {
+  practiceId: string;
+  /** Muss auf jeden Fall in die Tour (z. B. Termin) */
+  must: boolean;
+  /** Automatisch vorgeschlagen – fliegt wieder raus, wenn sie nicht passt */
+  suggested?: boolean;
+}
+
+export interface Tour {
+  id: string; // = Datum „YYYY-MM-DD“ (eine Tour pro Tag)
+  date: string;
+  startMode: 'home' | 'here';
+  dayStart: number;
+  dayEnd: number;
+  returnHome: boolean;
+  lunch: { enabled: boolean; from: number; to: number; minutes: number };
+  stops: TourStop[];
+  plan?: TourPlan;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PlanEntry =
+  | { kind: 'start'; time: number; label: string }
+  | { kind: 'drive'; from: number; to: number; minutes: number; km: number }
+  | { kind: 'visit'; practiceId: string; arrive: number; start: number; end: number; wait: number; park: number; fixed: boolean }
+  | { kind: 'break'; start: number; end: number }
+  | { kind: 'end'; time: number; label: string };
+
+export interface TourPlan {
+  computedAt: string;
+  /** Woher die Fahrzeiten stammen */
+  source: 'osrm' | 'estimate';
+  startPoint: { lat: number; lng: number; label: string };
+  entries: PlanEntry[];
+  dropped: { practiceId: string; reason: string }[];
+  totals: {
+    departure: number;
+    end: number;
+    visits: number;
+    driveMinutes: number;
+    waitMinutes: number;
+    km: number;
+  };
+  /** Streckenverlauf für die Karte [lat, lng] */
+  geometry?: [number, number][];
 }
 
 /** GeoJSON einer PLZ-Fläche */
@@ -116,4 +201,5 @@ export interface BackupFile {
   products: Product[];
   settings: Settings;
   extraPlzShapes: PlzFeature[];
+  tours?: Tour[];
 }

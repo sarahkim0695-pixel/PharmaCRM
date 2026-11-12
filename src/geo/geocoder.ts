@@ -123,7 +123,7 @@ export async function geocodeCached(p: Practice, fetchFn?: FetchFn): Promise<Geo
 
 // ---------- Warteschlange ----------
 
-export type QueueState = 'idle' | 'running' | 'paused' | 'offline' | 'waiting';
+export type QueueState = 'idle' | 'running' | 'paused' | 'offline' | 'waiting' | 'retry';
 
 export interface QueueStatus {
   state: QueueState;
@@ -137,6 +137,8 @@ class GeocodeQueue {
   status: QueueStatus = { state: 'idle', done: 0, total: 0, found: 0, notFound: 0 };
   private listeners = new Set<(s: QueueStatus) => void>();
   private stopRequested = false;
+  private failures = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
   fetchFn: FetchFn | undefined;
 
   constructor() {
@@ -165,6 +167,7 @@ class GeocodeQueue {
   /** Startet die Abarbeitung aller Praxen mit Status „pending“. */
   start(): void {
     if (this.status.state === 'running' || this.status.state === 'waiting') return;
+    clearTimeout(this.retryTimer);
     const total = this.pendingCount();
     if (!total) {
       this.set({ state: 'idle' });
@@ -177,6 +180,7 @@ class GeocodeQueue {
 
   pause(): void {
     this.stopRequested = true;
+    clearTimeout(this.retryTimer);
     this.set({ state: 'paused' });
   }
 
@@ -201,6 +205,7 @@ class GeocodeQueue {
             geoLabel: result.label,
           });
         }
+        this.failures = 0;
         this.set({
           done: this.status.done + 1,
           found: this.status.found + (result.status === 'not_found' ? 0 : 1),
@@ -214,9 +219,19 @@ class GeocodeQueue {
           if (!this.stopRequested) this.set({ state: 'running' });
           continue;
         }
-        // Netzwerkfehler → offline; wird bei „online“ automatisch fortgesetzt
         console.warn('Adresssuche unterbrochen:', err);
-        this.set({ state: 'offline' });
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          // wirklich offline → geht bei „online“ automatisch weiter
+          this.set({ state: 'offline' });
+          return;
+        }
+        // Wackelige Verbindung → automatisch neu versuchen (30 s, 60 s, … höchstens 5 min)
+        this.failures++;
+        const delay = Math.min(5 * 60_000, 30_000 * 2 ** (this.failures - 1));
+        this.set({ state: 'retry' });
+        this.retryTimer = setTimeout(() => {
+          if (this.status.state === 'retry') this.start();
+        }, delay);
         return;
       }
     }
@@ -232,4 +247,17 @@ export async function retryGeocode(p: Practice): Promise<void> {
   await db.delete('geocodeCache', addressKey(p));
   await store.savePractice({ ...p, geoStatus: 'pending' });
   geocodeQueue.start();
+}
+
+/** Freitext-Adresse suchen (z. B. die eigene Startadresse). */
+export async function geocodeText(
+  q: string,
+  fetchFn: FetchFn = (u) => fetch(u, { headers: { 'Accept-Language': 'de' } }),
+): Promise<{ lat: number; lng: number; label: string } | null> {
+  const hits = await throttledFetch(
+    `${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=de,at&accept-language=de`,
+    fetchFn,
+  );
+  if (!hits.length) return null;
+  return { lat: parseFloat(hits[0].lat), lng: parseFloat(hits[0].lon), label: hits[0].display_name };
 }

@@ -12,6 +12,7 @@ import { toast } from '../ui/toast';
 import { menuItem, pageHeader, section, field, type View } from './common';
 import { statusOptions } from '../state/selectors';
 import { APP_VERSION } from '../version';
+import { tourSettingsSection } from './tour-settings';
 
 export function moreView(): View {
   const el = h('div', { class: 'page' });
@@ -55,7 +56,7 @@ export function moreView(): View {
       h(
         'nav',
         { class: 'menu card' },
-        menuItem({ icon: 'settings', label: 'Einstellungen', sub: 'Farben, Erinnerungen', href: '#/einstellungen' }),
+        menuItem({ icon: 'settings', label: 'Einstellungen', sub: 'Startadresse, Arbeitszeit, Farben, Erinnerungen', href: '#/einstellungen' }),
         menuItem({ icon: 'info', label: 'Hilfe & Installation', sub: 'Auf dem iPad einrichten', href: '#/hilfe' }),
         menuItem({ icon: 'trash', label: 'Alle Daten löschen', danger: true, onclick: () => void clearAll() }),
       ),
@@ -116,6 +117,7 @@ export function settingsView(): View {
     setChildren(
       el,
       pageHeader({ title: 'Einstellungen', back: '/mehr' }),
+      tourSettingsSection(),
       section(
         'Farben der Status',
         h('p', { class: 'muted small' }, 'Tippe auf eine Farbe, um sie zu ändern.'),
@@ -154,7 +156,11 @@ export function settingsView(): View {
       ),
     );
   }
-  const unsub = store.subscribe(render);
+  // Nur bei geänderten Einstellungen neu zeichnen – sonst gingen Eingaben verloren,
+  // während z. B. die Adresssuche im Hintergrund Praxen speichert.
+  const unsub = store.subscribe((k) => {
+    if (k.has('settings')) render();
+  });
   render();
   return { el, destroy: unsub };
 }
@@ -188,11 +194,11 @@ export function helpView(): View {
       section(
         'Deine Daten',
         h('p', null, 'Alle Daten bleiben nur auf diesem Gerät. Es gibt keinen Server. Deshalb: regelmäßig ein Backup erstellen (Mehr → Backup) und die Datei in „Dateien“ / iCloud Drive speichern.'),
-        h('p', null, 'Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap (Nominatim) geschickt – keine Praxisnamen.'),
+        h('p', null, 'Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap (Nominatim) geschickt, für die Fahrzeiten der Tourplanung nur Koordinaten – keine Praxisnamen, keine Notizen.'),
       ),
       section(
         'Quellen',
-        h('p', null, 'Karten und PLZ-Grenzen: © OpenStreetMap-Mitwirkende (ODbL). Adresssuche: Nominatim.'),
+        h('p', null, 'Karten und PLZ-Grenzen: © OpenStreetMap-Mitwirkende (ODbL). Adresssuche: Nominatim. Fahrzeiten: OSRM-Routing der FOSSGIS (routing.openstreetmap.de).'),
         h('p', { class: 'muted small' }, `Version ${APP_VERSION}`),
       ),
     ),

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { mergeImport, parsePracticeSheets, detectColumns, newPracticeFromRow } from '../../src/import/practice-import';
+import { mergeImport, parsePracticeSheets, detectColumns, detectDayColumns, newPracticeFromRow, parseMinutes } from '../../src/import/practice-import';
+import { formatWeekHours } from '../../src/tour/opening-hours';
 import { applyTint, columnIndex, isYellow, readXlsx } from '../../src/import/xlsx-reader';
 
 const fixture = new Uint8Array(readFileSync(resolve(__dirname, '../fixtures/Beispiel-Praxisliste.xlsx')));
@@ -34,7 +35,7 @@ describe('xlsx-reader', () => {
     const sheets = readXlsx(fixture);
     expect(sheets).toHaveLength(1);
     const rows = sheets[0].rows;
-    expect(rows[2].map((c) => c.value)).toEqual(['Praxis', 'Fachrichtung', 'Straße', 'PLZ', 'Ort', 'Status', 'Hinweis']);
+    expect(rows[2].map((c) => c.value)).toEqual(['Praxis', 'Fachrichtung', 'Straße', 'PLZ', 'Ort', 'Status', 'Hinweis', 'Öffnungszeiten', 'Parken (Min)', 'Vor Ort (Min)']);
     expect(rows[3][3].value).toBe(80331);
     expect(rows[4][0].fill).toBe('FFFF00');
   });
@@ -100,5 +101,44 @@ describe('Praxis-Import', () => {
   it('legt neue Praxen mit Status „pending“ an', () => {
     const p = newPracticeFromRow({ rowNumber: 2, name: 'A', specialty: '', street: 'X 1', plz: '80331', city: 'München', status: 'Kunde', hint: '', phone: '', needsReview: true });
     expect(p).toMatchObject({ geoStatus: 'pending', needsReview: true, source: 'import', products: {} });
+  });
+});
+
+describe('Öffnungszeiten und Zeitaufwand aus Excel', () => {
+  it('liest Spalte „Öffnungszeiten“, „Parken (Min)“ und „Vor Ort (Min)“', () => {
+    const preview = parsePracticeSheets(readXlsx(fixture));
+    expect(preview.columns).toMatchObject({ hours: 7, park: 8, visit: 9 });
+    const byName = new Map(preview.rows.map((r) => [r.name, r]));
+    const anna = byName.get('Praxis Dr. Anna Beispiel')!;
+    expect(formatWeekHours(anna.openingHours)).toBe('Mo, Di, Do 08:00–12:00, 14:00–18:00 · Mi, Fr 08:00–12:00');
+    expect(anna).toMatchObject({ parkMinutes: 10, visitMinutes: 20 });
+    expect(byName.get('Praxis Rosenheim')!.visitMinutes).toBe(25);
+    expect(byName.get('Chirurgie Ingolstadt')!.openingHours).toBeUndefined();
+    expect(preview.hoursCount).toBe(6);
+    expect(preview.hoursProblems).toEqual([{ rowNumber: 8, name: 'Praxis am Dom', text: 'nach Vereinbarung' }]);
+  });
+
+  it('liest alternativ eine Spalte je Wochentag', () => {
+    const header = ['Praxis', 'PLZ', 'Ort', 'Mo', 'Di', 'Mittwoch', 'Do', 'Fr'].map((value) => ({ value }));
+    const row = ['Praxis X', 80331, 'München', '8-12, 14-18', '8-12', 'geschlossen', '8-12, 14-18', '8-13'].map((value) => ({ value }));
+    expect(detectDayColumns(header.map((c) => String(c.value)))).toEqual([3, 4, 5, 6, 7, undefined, undefined]);
+    const preview = parsePracticeSheets([{ name: 'T', rows: [header, row], rowFills: [] }]);
+    expect(formatWeekHours(preview.rows[0].openingHours)).toBe('Mo, Do 08:00–12:00, 14:00–18:00 · Di 08:00–12:00 · Fr 08:00–13:00');
+  });
+
+  it('versteht Minutenangaben', () => {
+    expect(parseMinutes(15)).toBe(15);
+    expect(parseMinutes('10 min')).toBe(10);
+    expect(parseMinutes('1,5 h')).toBe(90);
+    expect(parseMinutes('')).toBeUndefined();
+  });
+
+  it('erneuter Import ohne Öffnungszeiten behält die in der App gepflegten', () => {
+    const preview = parsePracticeSheets(readXlsx(fixture));
+    const existing = mergeImport([], preview.rows).toSave;
+    const withoutHours = preview.rows.map((r) => ({ ...r, openingHours: undefined, openingText: undefined, parkMinutes: undefined, visitMinutes: undefined }));
+    const res = mergeImport(existing, withoutHours);
+    expect(res.updated).toBe(0);
+    expect(existing.find((p) => p.name === 'Praxis Dr. Anna Beispiel')!.visitMinutes).toBe(20);
   });
 });

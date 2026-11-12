@@ -83,6 +83,7 @@ h1, h2, h3 { line-height: 1.2; }
   text-decoration: none;
 }
 .tab.active { color: var(--primary); }
+@media (max-width: 380px) { .tab { font-size: 11px; } }
 body.editing .tabbar { display: none; }
 
 /* ---------- Seiten ---------- */
@@ -465,6 +466,128 @@ button.stat:disabled { opacity: 0.6; }
 .segmented-sm .seg { min-height: 40px; font-size: 14px; }
 .seg-angeboten.on { background: #2f6fdb; color: #fff; }
 .seg-kauft.on { background: var(--ok); color: #fff; }
+
+/* ---------- Öffnungszeiten ---------- */
+
+.hours-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; padding: 4px 10px; border-radius: 999px; margin-bottom: 8px; font-size: 15px; }
+.hours-status.hours-open { background: #e7f6ed; color: #145c33; }
+.hours-status.hours-closed { background: #fde8e8; color: #8a1c1c; }
+.hours-status.hours-unknown { background: #f1f3f6; color: var(--muted); }
+.hours-table { border-collapse: collapse; margin: 4px 0 10px; font-size: 16px; }
+.hours-table th { text-align: left; padding: 4px 16px 4px 0; color: var(--muted); font-weight: 600; }
+.hours-table td { padding: 4px 0; }
+.hours-table tr.today th, .hours-table tr.today td { color: var(--primary-dark); font-weight: 700; }
+.duration-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin: 6px 0 12px; }
+.hours-edit { width: 100%; border-collapse: collapse; }
+.hours-edit th { text-align: left; padding: 4px 8px 4px 0; font-weight: 600; color: var(--muted); font-size: 14px; }
+.hours-edit td { padding: 4px 4px 4px 0; }
+.time-pair { display: flex; align-items: center; gap: 4px; }
+.time-pair input { min-width: 0; padding: 8px 6px !important; font-size: 16px !important; }
+.quick-preview { min-height: 24px; font-size: 14px; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.quick-preview .ok { color: var(--ok); display: inline-flex; gap: 4px; align-items: center; }
+.quick-preview .bad { color: var(--warn); display: inline-flex; gap: 4px; align-items: center; }
+
+/* ---------- Tourplanung ---------- */
+
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+.details-card > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 44px; justify-content: center; }
+.details-card > summary::-webkit-details-marker { display: none; }
+.details-card > summary .card-title { margin: 0; display: flex; align-items: center; gap: 8px; }
+.details-card > summary .card-title::after { content: '›'; font-size: 24px; color: #a3adbb; transition: transform 0.2s; margin-left: auto; }
+.details-card[open] > summary .card-title::after { transform: rotate(90deg); }
+.details-card[open] > summary { margin-bottom: 10px; }
+.btn-big { min-height: 58px; font-size: 19px; border-radius: 14px; }
+.spinner-light { border-color: rgba(255, 255, 255, 0.35); border-top-color: #fff; }
+.tour-calc { margin: 4px 0 14px; }
+.stat-warn { background: #fff3e2; border-color: #f3c58b; }
+.detail-buttons { display: flex; flex-direction: column; gap: 8px; }
+
+.stop-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.stop { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #edf0f4; }
+.stop.done { opacity: 0.55; }
+.stop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; color: inherit; text-decoration: none; }
+.stop-num {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.stop-num.none { background: #d7dee8; color: var(--muted); }
+.stop-hours { font-size: 14px; }
+.stop-hours.hours-ok { color: var(--ok); }
+.stop-hours.hours-closed { color: var(--danger); }
+.stop-hours.hours-unknown { color: var(--muted); }
+.stop-hours.hours-appt { color: var(--primary-dark); font-weight: 700; }
+.must-btn { width: auto; padding: 0 8px; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 600; flex-direction: column; height: 52px; }
+.must-btn.on { color: var(--primary); }
+
+.timeline { list-style: none; margin: 8px 0 12px; padding: 0; }
+.tl { display: grid; grid-template-columns: 58px 1fr; gap: 10px; position: relative; }
+.tl::before { content: ''; position: absolute; left: 70px; top: 0; bottom: 0; border-left: 2px solid #d7dee8; }
+.tl-time { text-align: right; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; font-size: 15px; padding-top: 8px; }
+.tl-time span { color: var(--muted); font-size: 13px; }
+.tl-body { padding: 8px 0 8px 14px; min-width: 0; }
+.tl-point .tl-body { display: flex; align-items: center; gap: 8px; color: var(--primary-dark); }
+.tl-drive .tl-body, .tl-break .tl-body { color: var(--muted); font-size: 14px; padding-top: 2px; padding-bottom: 2px; }
+.tl-break .tl-body { color: #7a5a00; font-weight: 600; }
+.tl-break .tl-time { padding-top: 2px; font-size: 14px; }
+.tl-visit .tl-body { background: #f7f9fc; border-radius: 12px; margin: 4px 0 4px 10px; padding: 10px 12px; }
+.tl-visit.done .tl-body { background: #eef7f1; }
+.tl-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; }
+.tl-title a { color: var(--text); text-decoration: none; }
+.tl-title .stop-num { width: 26px; height: 26px; font-size: 13px; }
+.tl-meta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.tl-wait { font-size: 14px; color: var(--warn); margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tl-wait.big { font-weight: 700; }
+.tl-actions { margin-top: 8px; }
+.plan-actions { margin: 8px 0; }
+.dropped { margin-top: 8px; }
+
+.pick-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.pick { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; border-bottom: 1px solid #edf0f4; cursor: pointer; }
+.pick input[type='checkbox'] { width: 26px; height: 26px; flex: none; accent-color: var(--primary); }
+.pick.already { opacity: 0.5; }
+.page-tour .chips .muted { align-self: center; }
+
+/* Tour auf der Karte */
+.tour-pin-wrap { background: none; border: none; }
+.tour-pin {
+  --pin: var(--primary);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pin);
+  color: #fff;
+  border: 3px solid #fff;
+  box-shadow: var(--shadow-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+}
+.tour-pin.done { background: #7d8899; }
+.tour-start { background: none; border: none; }
+.tour-start span {
+  display: block;
+  text-align: center;
+  background: #17202e;
+  color: #fff;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 26px;
+  border: 2px solid #fff;
+}
+.popup-tour { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
 
 /* ---------- Menü ---------- */
 

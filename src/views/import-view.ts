@@ -23,6 +23,7 @@ export function importView(): View {
         'Praxisliste (.xlsx)',
         h('p', null, 'Wähle deine Excel-Datei, z. B. ', h('b', null, 'Praxisliste_Gebiet.xlsx'), '. Erwartete Spalten:'),
         h('p', { class: 'columns-hint' }, 'Praxis · Fachrichtung · Straße · PLZ · Ort · Status · Hinweis'),
+        h('p', { class: 'muted small' }, 'Optional für die Tourplanung: Öffnungszeiten (z. B. „Mo-Fr 8-12, Mo Di Do 14-18“ – oder je eine Spalte Mo, Di, Mi …), Parken (Min), Vor Ort (Min).'),
         h('ul', { class: 'bullets' },
           h('li', null, 'Gelb markierte Zeilen werden als ', h('span', { class: 'badge badge-review' }, 'prüfen'), ' angezeigt.'),
           h('li', null, 'Erneuter Import aktualisiert vorhandene Praxen – Besuche, Produkte und Pins bleiben erhalten.'),
@@ -57,7 +58,7 @@ export function importView(): View {
       section(
         'Vorschau',
         h('p', { class: 'muted small' }, `${fileName} · Blatt „${preview.sheetName}“ · Überschriften in Zeile ${preview.headerRowNumber}`),
-        h('ul', { class: 'col-check' }, (['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint', 'phone'] as Field[]).map(colRow)),
+        h('ul', { class: 'col-check' }, (['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint', 'phone', 'hours', 'park', 'visit'] as Field[]).map(colRow)),
         preview.missingColumns.length
           ? h('div', { class: 'notice notice-warn' }, iconEl('warning', 20), `Nicht gefunden: ${preview.missingColumns.map((f) => FIELD_LABELS[f]).join(', ')}. Diese Angaben bleiben leer.`)
           : null,
@@ -82,6 +83,18 @@ export function importView(): View {
           ? h('details', { class: 'details' },
               h('summary', null, `Gelb markierte Zeilen anzeigen (${preview.reviewCount})`),
               h('ul', { class: 'bullets' }, preview.rows.filter((r) => r.needsReview).map((r) => h('li', null, `Zeile ${r.rowNumber}: ${r.name}, ${r.city}`))),
+            )
+          : null,
+        preview.hoursCount || preview.hoursProblems.length
+          ? h('div', null,
+              h('h3', { class: 'sheet-section' }, 'Öffnungszeiten'),
+              h('p', null, `Bei ${plural(preview.hoursCount, 'Praxis', 'Praxen')} erkannt${preview.dayColumns.some((c) => c !== undefined) ? ' (Spalten je Wochentag)' : ''}.`),
+              preview.hoursProblems.length
+                ? h('details', { class: 'details' },
+                    h('summary', null, `Nicht lesbar: ${preview.hoursProblems.length} – bitte später in der App eintragen`),
+                    h('ul', { class: 'bullets' }, preview.hoursProblems.map((x) => h('li', null, `Zeile ${x.rowNumber}: ${x.name} – „${x.text}“`))),
+                  )
+                : null,
             )
           : null,
         preview.skippedRows ? h('p', { class: 'muted small' }, `${preview.skippedRows} Zeilen ohne Praxisname wurden übersprungen.`) : null,

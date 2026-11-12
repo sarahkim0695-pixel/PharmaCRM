@@ -6,6 +6,7 @@
  *  - focus      wie normal, eine Praxis wird angesprungen
  *  - territory  Gebiet bearbeiten: PLZ antippen = hinzufügen/entfernen
  *  - pin        Pin einer Praxis von Hand setzen/verschieben
+ *  - tour       berechnete Tour: nummerierte Stopps und Streckenverlauf
  */
 import L from 'leaflet';
 import 'leaflet.markercluster';
@@ -25,13 +26,16 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { colorForStatus } from '../utils/colors';
 import { plural } from '../utils/text';
+import { formatDateShort } from '../utils/dates';
+import { formatTime } from '../tour/opening-hours';
 import { buildPopup } from './popup';
 
 export type MapMode =
   | { kind: 'normal' }
   | { kind: 'focus'; practiceId: string }
   | { kind: 'territory' }
-  | { kind: 'pin'; practiceId: string };
+  | { kind: 'pin'; practiceId: string }
+  | { kind: 'tour'; date: string };
 
 const TERRITORY_STYLE: L.PathOptions = {
   color: '#c99700',
@@ -66,6 +70,7 @@ export class MapView {
   private queueStatus: QueueStatus | null = null;
   private visible = false;
   private needsInitialView = false;
+  private tourLayer: L.LayerGroup | null = null;
 
   constructor(container: HTMLElement) {
     const mapEl = h('div', { class: 'map' });
@@ -122,6 +127,7 @@ export class MapView {
     store.subscribe((kinds) => {
       if (kinds.has('practices') || kinds.has('visits') || kinds.has('settings')) this.refreshPractices();
       if (kinds.has('territory') || kinds.has('shapes')) void this.refreshShapes();
+      if (this.mode.kind === 'tour' && (kinds.has('tours') || kinds.has('visits'))) this.drawTour(this.mode.date, false);
       this.refreshOverlay();
     });
     filterState.subscribe(() => {
@@ -161,6 +167,7 @@ export class MapView {
     this.mode = mode;
     if (prev.kind === 'pin' && mode.kind !== 'pin') this.removePinMarker();
     if (prev.kind === 'territory' && mode.kind !== 'territory') this.removeEditLayer();
+    if (prev.kind === 'tour') this.removeTourLayer();
 
     if (mode.kind === 'territory') {
       this.map.closePopup();
@@ -170,6 +177,10 @@ export class MapView {
       this.map.closePopup();
       this.map.removeLayer(this.cluster);
       this.startPinMode(mode.practiceId);
+    } else if (mode.kind === 'tour') {
+      this.map.closePopup();
+      this.map.removeLayer(this.cluster);
+      this.drawTour(mode.date, true);
     } else {
       if (!this.map.hasLayer(this.cluster)) this.map.addLayer(this.cluster);
       if (mode.kind === 'focus') this.focusPractice(mode.practiceId);
@@ -428,6 +439,63 @@ export class MapView {
     goBack(`/praxis/${p.id}`);
   }
 
+  // ---------- Tour ----------
+
+  private removeTourLayer(): void {
+    if (this.tourLayer) this.map.removeLayer(this.tourLayer);
+    this.tourLayer = null;
+  }
+
+  private drawTour(date: string, fit: boolean): void {
+    this.removeTourLayer();
+    const plan = store.tours.get(date)?.plan;
+    if (!plan) return;
+    const layer = L.layerGroup();
+    if (plan.geometry?.length) {
+      L.polyline(plan.geometry, { color: '#1d5fbf', weight: 5, opacity: 0.75, interactive: false }).addTo(layer);
+    }
+    L.marker([plan.startPoint.lat, plan.startPoint.lng], {
+      icon: L.divIcon({ className: 'tour-start', html: '<span>Start</span>', iconSize: [52, 26], iconAnchor: [26, 13] }),
+      interactive: false,
+    }).addTo(layer);
+    let n = 0;
+    for (const e of plan.entries) {
+      if (e.kind !== 'visit') continue;
+      n++;
+      const p = store.getPractice(e.practiceId);
+      if (!p || p.lat === undefined || p.lng === undefined) continue;
+      const done = store.visitsFor(p.id).some((v) => v.date === date);
+      const color = colorForStatus(p.status, store.settings.statusColors);
+      const m = L.marker([p.lat, p.lng], {
+        icon: L.divIcon({
+          className: 'tour-pin-wrap',
+          html: `<div class="tour-pin${done ? ' done' : ''}" style="--pin:${color}">${done ? '✓' : n}</div>`,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17],
+          popupAnchor: [0, -14],
+        }),
+        zIndexOffset: 1000 - n,
+      });
+      const time = `${formatTime(e.start)}–${formatTime(e.end)}`;
+      m.bindPopup(() => {
+        const el = buildPopup(store.getPractice(p.id) ?? p);
+        el.prepend(h('div', { class: 'popup-tour' }, `Stopp ${n} · Besuch ${time}`));
+        return el;
+      }, { maxWidth: 320, minWidth: 240 });
+      m.addTo(layer);
+    }
+    layer.addTo(this.map);
+    this.tourLayer = layer;
+    if (fit) {
+      const pts: L.LatLngExpression[] = plan.geometry?.length ? plan.geometry : [[plan.startPoint.lat, plan.startPoint.lng]];
+      // Erst wenn die Karte sichtbar ist und ihre Größe kennt, den Ausschnitt berechnen
+      requestAnimationFrame(() => {
+        this.map.invalidateSize();
+        this.map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
+      });
+    }
+  }
+
   // ---------- Eigener Standort ----------
 
   locate(): void {
@@ -481,7 +549,7 @@ export class MapView {
   private refreshOverlay(): void {
     if (!this.els.top) return;
     const mode = this.mode.kind;
-    const editing = mode === 'territory' || mode === 'pin';
+    const editing = mode === 'territory' || mode === 'pin' || mode === 'tour';
     this.els.top.hidden = editing;
     this.els.legend.hidden = editing;
     this.els.banner.hidden = !editing;
@@ -539,6 +607,19 @@ export class MapView {
           h('span', null, `Tippe PLZ-Flächen an, um sie hinzuzufügen oder zu entfernen. Aktuell ${plural(store.settings.territoryPlz.length, 'PLZ', 'PLZ')}.`),
         ),
         h('button', { class: 'btn btn-primary', onclick: () => goBack('/gebiet') }, 'Fertig'),
+      );
+    } else if (this.mode.kind === 'tour') {
+      const date = this.mode.date;
+      const plan = store.tours.get(date)?.plan;
+      setChildren(
+        this.els.banner,
+        h('div', { class: 'map-banner-text' },
+          h('strong', null, `Tour ${formatDateShort(date)}`),
+          h('span', null, plan
+            ? `${plural(plan.totals.visits, 'Besuch', 'Besuche')} · ${formatTime(plan.totals.departure)}–${formatTime(plan.totals.end)} · ${plan.totals.km} km`
+            : 'Noch nicht berechnet.'),
+        ),
+        h('button', { class: 'btn btn-primary', onclick: () => navigate(`/tour/${date}`) }, 'Zur Tour'),
       );
     } else if (mode === 'pin' && this.mode.kind === 'pin') {
       const p = store.getPractice(this.mode.practiceId);
@@ -609,13 +690,14 @@ export class MapView {
       el.hidden = true;
       return;
     }
-    el.hidden = this.mode.kind === 'territory' || this.mode.kind === 'pin';
+    el.hidden = this.mode.kind === 'territory' || this.mode.kind === 'pin' || this.mode.kind === 'tour';
     const text: Record<string, string> = {
       running: `Adressen werden gesucht … ${s.done} / ${s.total}`,
       waiting: 'Adresssuche macht kurz Pause …',
       paused: `Adresssuche pausiert – ${pending} offen`,
-      offline: `Offline – ${pending} Adressen warten`,
-      idle: `${pending} Adressen noch nicht gesucht`,
+      offline: `Offline – ${plural(pending, 'Adresse wartet', 'Adressen warten')}`,
+      retry: `Verbindungsproblem – neuer Versuch gleich (${pending} offen)`,
+      idle: `${plural(pending, 'Adresse', 'Adressen')} noch nicht gesucht`,
     };
     const running = s.state === 'running' || s.state === 'waiting';
     setChildren(
