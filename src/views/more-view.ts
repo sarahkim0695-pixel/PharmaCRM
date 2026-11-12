@@ -194,11 +194,11 @@ export function helpView(): View {
       section(
         'Deine Daten',
         h('p', null, 'Alle Daten bleiben nur auf diesem Gerät. Es gibt keinen Server. Deshalb: regelmäßig ein Backup erstellen (Mehr → Backup) und die Datei in „Dateien“ / iCloud Drive speichern.'),
-        h('p', null, 'Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap (Nominatim) geschickt – keine Praxisnamen.'),
+        h('p', null, 'Für die Adresssuche werden nur Straße, PLZ und Ort an OpenStreetMap (Nominatim) geschickt, für die Fahrzeiten der Tourplanung nur Koordinaten – keine Praxisnamen, keine Notizen.'),
       ),
       section(
         'Quellen',
-        h('p', null, 'Karten und PLZ-Grenzen: © OpenStreetMap-Mitwirkende (ODbL). Adresssuche: Nominatim.'),
+        h('p', null, 'Karten und PLZ-Grenzen: © OpenStreetMap-Mitwirkende (ODbL). Adresssuche: Nominatim. Fahrzeiten: OSRM-Routing der FOSSGIS (routing.openstreetmap.de).'),
         h('p', { class: 'muted small' }, `Version ${APP_VERSION}`),
       ),
     ),

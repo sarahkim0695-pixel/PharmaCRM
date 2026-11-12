@@ -4,6 +4,7 @@
  * Aufruf:  npm run build && npm run test:e2e
  * Optional: REAL_GEOCODE=1 → echte Adresssuche bei Nominatim statt Testdaten.
  *           SHOTS=pfad       → Bildschirmfotos in diesen Ordner schreiben.
+ *           DEVICE='iPhone 13' → anderes Gerät (Standard: iPad quer).
  *
  * Braucht Playwright (npx playwright install chromium), ist aber nicht Teil von `npm test`.
  */
@@ -82,10 +83,25 @@ try {
   await waitForServer();
   browser = await chromium.launch();
   const real = process.env.REAL_GEOCODE === '1';
-  const context = await browser.newContext({ ...devices['iPad (gen 7) landscape'], serviceWorkers: real ? 'allow' : 'block' });
+  const context = await browser.newContext({ ...devices[process.env.DEVICE ?? 'iPad (gen 7) landscape'], serviceWorkers: real ? 'allow' : 'block' });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (real) {
+    // Manche Firmen-/Test-Proxys blockieren „;“ im Pfad (OSRM-Format). Dann die echte Anfrage über curl stellen.
+    await page.route('https://routing.openstreetmap.de/**', async (route) => {
+      const { execFileSync } = await import('node:child_process');
+      let body = '';
+      for (let attempt = 1; attempt <= 4 && !body; attempt++) {
+        try {
+          body = execFileSync('curl', ['-sS', '-m', '30', route.request().url()], { encoding: 'utf8' });
+        } catch {
+          await new Promise((r) => setTimeout(r, attempt * 2000)); // Netz der Testumgebung wackelt manchmal
+        }
+      }
+      await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body });
+    });
+  }
   if (!real) {
     await page.route('https://routing.openstreetmap.de/**', (route) =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeOsrm(route.request().url())) }),
@@ -124,7 +140,7 @@ try {
 
   // 4. Adresssuche abwarten (max. 1 Anfrage/Sekunde → einige Sekunden)
   await page.getByRole('button', { name: 'Zur Karte' }).click();
-  await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: 90_000 });
+  await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: real ? 240_000 : 90_000 });
   await page.waitForTimeout(800);
   const pins = await page.locator('.pin-wrap').count();
   const clusters = await page.locator('.cluster').count();
@@ -292,6 +308,7 @@ try {
   assert.ok(visitsPlanned >= 4, `nur ${visitsPlanned} Besuche eingeplant`);
   assert.ok(await page.locator('.tl-break').count() === 1, 'Mittagspause fehlt');
   assert.match(await page.locator('.tl-point').first().innerText(), /Abfahrt Zuhause/);
+  assert.equal(await page.locator('text=Fahrzeiten nur geschätzt').count(), 0, 'Routing-Server nicht erreicht');
   await shot('17-tour-plan');
   await page.locator('.timeline').screenshot({ path: join(shots ?? root, '18-tour-zeitplan.png') }).catch(() => {});
 

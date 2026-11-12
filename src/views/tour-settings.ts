@@ -24,7 +24,8 @@ export function tourSettingsSection(): HTMLElement {
     if (!q) return;
     result.textContent = 'Suche …';
     try {
-      const hit = await geocodeText(q);
+      // bei einem kurzen Netzaussetzer einmal neu versuchen
+      const hit = await geocodeText(q).catch(() => new Promise((r) => setTimeout(r, 2000)).then(() => geocodeText(q)));
       if (!hit) {
         result.textContent = 'Adresse nicht gefunden – bitte genauer schreiben (mit PLZ und Ort).';
         return;

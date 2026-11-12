@@ -695,8 +695,9 @@ export class MapView {
       running: `Adressen werden gesucht … ${s.done} / ${s.total}`,
       waiting: 'Adresssuche macht kurz Pause …',
       paused: `Adresssuche pausiert – ${pending} offen`,
-      offline: `Offline – ${pending} Adressen warten`,
-      idle: `${pending} Adressen noch nicht gesucht`,
+      offline: `Offline – ${plural(pending, 'Adresse wartet', 'Adressen warten')}`,
+      retry: `Verbindungsproblem – neuer Versuch gleich (${pending} offen)`,
+      idle: `${plural(pending, 'Adresse', 'Adressen')} noch nicht gesucht`,
     };
     const running = s.state === 'running' || s.state === 'waiting';
     setChildren(
