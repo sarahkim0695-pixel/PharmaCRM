@@ -30,7 +30,8 @@ export type RouteName =
   | 'backup'
   | 'settings'
   | 'help'
-  | 'tour';
+  | 'tour'
+  | 'duplicates';
 
 const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/karte\/?$/, 'map', []],
@@ -52,6 +53,7 @@ const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/backup$/, 'backup', []],
   [/^\/einstellungen$/, 'settings', []],
   [/^\/hilfe$/, 'help', []],
+  [/^\/doppelte$/, 'duplicates', []],
   [/^\/tour$/, 'tour', []],
   [/^\/tour\/(\d{4}-\d{2}-\d{2})$/, 'tour', ['date']],
 ];

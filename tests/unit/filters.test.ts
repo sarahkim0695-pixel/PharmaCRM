@@ -15,7 +15,7 @@ const visits: Record<string, Visit> = {
   '1': { id: 'v1', practiceId: '1', date: '2026-10-30', contact: '', note: '', createdAt: '', updatedAt: '' },
   '2': { id: 'v2', practiceId: '2', date: '2026-01-10', contact: '', note: '', createdAt: '', updatedAt: '' },
 };
-const ctx: FilterContext = { lastVisit: (id) => visits[id], staleDays: 90, territory: new Set(['80331']), today: new Date(2026, 10, 6) };
+const ctx: FilterContext = { lastVisit: (id) => visits[id], intervalOf: () => 90, territory: new Set(['80331']), today: new Date(2026, 10, 6) };
 
 describe('Filter', () => {
   const list = [
@@ -30,7 +30,8 @@ describe('Filter', () => {
     expect(ids({ search: 'MÜNCHEN' })).toEqual(['1', '3']);
   });
   it('filtert nach Status, Ort, prüfen, Standort, Termin, Gebiet, Produkt', () => {
-    expect(ids({ statuses: ['kein kunde'] })).toEqual(['2']);
+    expect(ids({ statuses: ['kein'] })).toEqual(['2']);
+    expect(ids({ statuses: ['prozess'] })).toEqual(['3']); // „Interessent“ → im Gespräch
     expect(ids({ cities: ['Augsburg'] })).toEqual(['2']);
     expect(ids({ onlyReview: true })).toEqual(['2']);
     expect(ids({ locationProblem: true })).toEqual(['3']);
@@ -44,7 +45,7 @@ describe('Filter', () => {
   });
   it('zählt aktive Filter', () => {
     expect(activeFilterCount(EMPTY_FILTER)).toBe(0);
-    expect(activeFilterCount({ ...EMPTY_FILTER, statuses: ['kunde'], stale: true })).toBe(2);
+    expect(activeFilterCount({ ...EMPTY_FILTER, statuses: ['aktiv'], stale: true })).toBe(2);
   });
   it('sortiert nach Name, letztem Besuch, Termin und Entfernung', () => {
     expect(sortPractices(list, 'name', ctx).map((x) => x.id)).toEqual(['2', '1', '3']);

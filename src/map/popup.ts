@@ -4,14 +4,14 @@ import { store } from '../state/store';
 import type { Practice } from '../types';
 import { h } from '../ui/dom';
 import { iconEl } from '../ui/icons';
-import { colorForStatus, statusLabel } from '../utils/colors';
+import { practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { appleMapsUrl, fullAddress } from '../utils/maps';
+import { KIND_LABEL, kindOf } from '../utils/kind';
 import { addPracticeToTour } from '../views/tour-view';
 
 export function statusBadge(p: Practice) {
-  const color = colorForStatus(p.status, store.settings.statusColors);
-  return h('span', { class: 'badge', style: { '--badge': color } }, statusLabel(p.status));
+  return h('span', { class: 'badge', style: { '--badge': practiceColor(p, store.settings) } }, STATE_LABEL[stateKeyOf(p)]);
 }
 
 export function reviewBadge() {
@@ -24,7 +24,7 @@ export function buildPopup(p: Practice): HTMLElement {
     'div',
     { class: 'popup' },
     h('div', { class: 'popup-title' }, p.name),
-    p.specialty && h('div', { class: 'popup-sub' }, p.specialty),
+    h('div', { class: 'popup-sub' }, [kindOf(p) === 'klinik' ? KIND_LABEL.klinik : '', p.specialty].filter(Boolean).join(' · ')),
     h('div', { class: 'popup-addr' }, fullAddress(p)),
     h(
       'div',

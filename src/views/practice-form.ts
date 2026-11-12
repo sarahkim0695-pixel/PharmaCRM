@@ -4,8 +4,10 @@ import { allShapes } from '../geo/plz-data';
 import { goBack, navigate, type Route } from '../router';
 import { distinctValues } from '../state/selectors';
 import { store } from '../state/store';
-import type { Practice } from '../types';
-import { h } from '../ui/dom';
+import type { FacilityKind, Practice } from '../types';
+import { h, setChildren } from '../ui/dom';
+import { KIND_LABEL } from '../utils/kind';
+import { STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { toast } from '../ui/toast';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -25,11 +27,32 @@ export function practiceFormView(route: Route): View {
     h('input', { name, value, autocomplete: 'off', ...extra });
 
   const name = input('name', p.name, { required: true, placeholder: 'z. B. Praxis Dr. Muster' });
+  // Art: Praxis oder Klinik
+  let kind: FacilityKind = p.kind ?? (route.query.get('art') === 'klinik' ? 'klinik' : 'praxis');
+  const kindSeg = h('div', { class: 'segmented' });
+  const renderKind = () =>
+    setChildren(
+      kindSeg,
+      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
+        h('button', { type: 'button', class: ['seg', kind === k && 'on'], onclick: () => { kind = k; renderKind(); } }, KIND_LABEL[k]),
+      ),
+    );
+  renderKind();
   const specialty = input('specialty', p.specialty, { list: 'dl-specialty', placeholder: 'z. B. Allgemeinmedizin' });
   const street = input('street', p.street, { placeholder: 'Straße und Hausnummer' });
   const plz = input('plz', p.plz, { inputmode: 'numeric', maxlength: 5, pattern: '\\d{5}', placeholder: '80331' });
   const city = input('city', p.city, { placeholder: 'Ort' });
-  const status = input('status', p.status ?? (isNew ? 'kein Kunde' : ''), { list: 'dl-status', placeholder: 'z. B. Kunde' });
+  // Kundenstatus: aktiv / im Gespräch / kein Kunde (oder offen)
+  let state: StateKey = isNew ? 'kein' : stateKeyOf(p as Practice);
+  const stateSeg = h('div', { class: 'segmented' });
+  const renderState = () =>
+    setChildren(
+      stateSeg,
+      STATE_KEYS.map((k) =>
+        h('button', { type: 'button', class: ['seg', state === k && 'on'], onclick: () => { state = k; renderState(); } }, k === 'offen' ? 'offen' : STATE_LABEL[k]),
+      ),
+    );
+  renderState();
   const phone = input('phone', p.phone, { type: 'tel', placeholder: 'optional' });
   const hint = h('textarea', { name: 'hint', rows: 3, placeholder: 'optional' }, p.hint ?? '');
   const review = h('input', { type: 'checkbox', class: 'switch', checked: !!p.needsReview });
@@ -46,16 +69,16 @@ export function practiceFormView(route: Route): View {
   const form = h(
     'form',
     { class: 'form card', onsubmit: (e: Event) => { e.preventDefault(); void save(); } },
-    field('Praxis *', name),
+    kindSeg,
+    field('Name *', name),
     field('Fachrichtung', specialty),
     field('Straße', street),
     h('div', { class: 'grid-2' }, field('PLZ', plz), field('Ort', city)),
-    field('Status', status, 'Vorschläge erscheinen beim Tippen.'),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Kundenstatus'), stateSeg),
     field('Telefon', phone),
     field('Hinweis', hint),
     h('label', { class: 'switch-row' }, h('span', null, 'Als „prüfen“ markieren'), review),
     datalist('dl-specialty', distinctValues('specialty')),
-    datalist('dl-status', [...new Set(['Kunde', 'kein Kunde', ...distinctValues('status')])]),
     h(
       'div',
       { class: 'form-actions' },
@@ -85,12 +108,14 @@ export function practiceFormView(route: Route): View {
       updatedAt: ts,
       geoStatus: 'pending',
       ...existing,
+      kind,
       name: name.value.trim(),
       specialty: specialty.value.trim(),
       street: street.value.trim(),
       plz: plzVal,
       city: city.value.trim(),
-      status: status.value.trim(),
+      status: p.status ?? '',
+      customerState: state === 'offen' ? undefined : state,
       phone: phone.value.trim(),
       hint: hint.value.trim(),
       needsReview: review.checked,
@@ -113,7 +138,7 @@ export function practiceFormView(route: Route): View {
     else goBack(`/praxis/${next.id}`);
   }
 
-  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neue Praxis' : 'Praxis bearbeiten', back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
+  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neuer Eintrag' : `${KIND_LABEL[p.kind ?? 'praxis']} bearbeiten`, back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
   if (isNew) requestAnimationFrame(() => name.focus());
   return { el };
 }

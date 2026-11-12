@@ -28,6 +28,8 @@ rows = [
     ("Praxis Allgäu", "Allgemeinmedizin", "Rathausplatz 22", 87435, "Kempten (Allgäu)", "Interessent", "neu eröffnet", "Mo-Fr 7:30-12:30", None, None),
     ("Praxis Unbekannt", "Allgemeinmedizin", "Nirgendwoweg 999", 80331, "München", "kein Kunde", "Adresse existiert nicht", None, None, None),
     ("Praxis Rosenheim", "Urologie", "Königstraße 24", 83022, "Rosenheim", "", "", "Mo-Fr 8-12; Di Do 15-18", None, "25 min"),
+    # doppelte Zeile (gleicher Name + gleiche Adresse) – wird beim Import aussortiert
+    ("Chirurgie Ingolstadt", "Chirurgie", "Rathausplatz 2", 85049, "Ingolstadt", "Kunde", "Zeile doppelt in der Liste", None, None, None),
 ]
 for r in rows:
     ws.append(list(r))
@@ -51,6 +53,15 @@ ws.cell(row=12, column=3).fill = orange  # Praxis Rosenheim – Straße goldgelb
 
 for col, width in zip("ABCDEFGHIJ", (36, 18, 22, 8, 18, 12, 28, 44, 12, 12)):
     ws.column_dimensions[col].width = width
+
+# Zweites Tabellenblatt „Kliniken“ – alle Zeilen werden als Klinik erkannt
+wk = wb.create_sheet("Kliniken")
+wk.append(["Klinik", "Fachrichtung", "Straße", "PLZ", "Ort", "Status", "Hinweis", "Öffnungszeiten"])
+wk.append(["Klinikum Beispielstadt", "Chirurgie", "Ismaninger Straße 22", 81675, "München", "Kunde", "Einkauf 2. OG", "Mo-Fr 8-16"])
+# gleiche Adresse wie „Orthopädie am Rathaus“ → mögliche Doppelung (wird nur gemeldet)
+wk.append(["Klinik am Rathaus", "Orthopädie", "Altstadt 315", 84028, "Landshut", "Interessent", "", None])
+for col, width in zip("ABCDEFGH", (30, 16, 24, 8, 14, 12, 18, 18)):
+    wk.column_dimensions[col].width = width
 
 out = Path(__file__).with_name("Beispiel-Praxisliste.xlsx")
 wb.save(out)

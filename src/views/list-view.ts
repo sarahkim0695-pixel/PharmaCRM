@@ -8,9 +8,10 @@ import { openSheet } from '../ui/dialog';
 import { debounce, h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { dueInfo, practiceColor, STATE_LABEL, stateColor, stateKeyOf } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
-import { plural } from '../utils/text';
+import { entityWord, KIND_LABEL, KIND_PLURAL, kindOf } from '../utils/kind';
+import type { FacilityKind } from '../types';
 import { emptyState, field, pageHeader, type View } from './common';
 
 const PAGE_SIZE = 150;
@@ -52,7 +53,7 @@ export function listView(route: Route): View {
     'div',
     { class: 'page page-list' },
     pageHeader({
-      title: 'Praxen',
+      title: store.practiceList().some((p) => kindOf(p) === 'klinik') ? 'Praxen & Kliniken' : 'Praxen',
       actions: h('button', { class: 'icon-btn', 'aria-label': 'Praxis anlegen', onclick: () => navigate('/praxis/neu') }, iconEl('plus', 26)),
     }),
     h('div', { class: 'list-tools' }, h('div', { class: 'searchbox' }, iconEl('search', 20), search), h('div', { class: 'row' }, filterBtn, sortSelect)),
@@ -70,8 +71,8 @@ export function listView(route: Route): View {
 
     const items = listPractices();
     const total = store.practices.size;
-    count.textContent =
-      items.length === total ? plural(total, 'Praxis', 'Praxen') : `${items.length} von ${plural(total, 'Praxis', 'Praxen')}`;
+    const clinics = store.practiceList().some((p) => kindOf(p) === 'klinik');
+    count.textContent = items.length === total ? entityWord(total, clinics) : `${items.length} von ${entityWord(total, clinics)}`;
 
     if (!total) {
       setChildren(
@@ -110,13 +111,14 @@ export function listView(route: Route): View {
     const statusLabels = new Map(statusOptions().map((o) => [o.key, o.label]));
     setChildren(
       chips,
+      (f.kinds ?? []).map((k) => chip(KIND_PLURAL[k], () => filterState.update({ kinds: f.kinds.filter((x) => x !== k) }))),
       f.statuses.map((s) => chip(statusLabels.get(s) ?? s, () => filterState.update({ statuses: f.statuses.filter((x) => x !== s) }))),
       f.cities.map((c) => chip(c, () => filterState.update({ cities: f.cities.filter((x) => x !== c) }))),
       f.specialties.map((c) => chip(c, () => filterState.update({ specialties: f.specialties.filter((x) => x !== c) }))),
       f.plz.map((c) => chip(`PLZ ${c}`, () => filterState.update({ plz: f.plz.filter((x) => x !== c) }))),
       f.onlyReview && chip('prüfen', () => filterState.update({ onlyReview: false })),
       f.locationProblem && chip('Standort fehlt/ungenau', () => filterState.update({ locationProblem: false })),
-      f.stale && chip(`> ${store.settings.staleDays} Tage nicht besucht`, () => filterState.update({ stale: false })),
+      f.stale && chip('Besuch fällig', () => filterState.update({ stale: false })),
       f.hasAppointment && chip('mit Termin', () => filterState.update({ hasAppointment: false })),
       f.territory !== 'all' && chip(f.territory === 'inside' ? 'im Gebiet' : 'außerhalb Gebiet', () => filterState.update({ territory: 'all' })),
       f.productId && f.productState && chip(
@@ -147,7 +149,9 @@ export function listView(route: Route): View {
 
 function row(p: Practice): HTMLElement {
   const last = store.lastVisit(p.id);
-  const color = colorForStatus(p.status, store.settings.statusColors);
+  const color = practiceColor(p, store.settings);
+  const due = dueInfo(p, last?.date, store.settings);
+  const isDue = !due.never && due.dueInDays <= 0;
   const noPin = p.geoStatus === 'not_found';
   return h(
     'li',
@@ -155,17 +159,18 @@ function row(p: Practice): HTMLElement {
     h(
       'a',
       { class: 'prow', href: `#/praxis/${p.id}` },
-      h('span', { class: 'dot', style: { background: color }, title: p.status }),
+      h('span', { class: ['dot', kindOf(p) === 'klinik' && 'dot-klinik'], style: { background: color }, title: STATE_LABEL[stateKeyOf(p)] }),
       h(
         'span',
         { class: 'prow-main' },
         h('span', { class: 'prow-title' }, p.name),
         h('span', { class: 'prow-sub' }, [p.specialty, `${p.plz} ${p.city}`.trim()].filter(Boolean).join(' · ')),
-        (p.needsReview || noPin || p.geoStatus === 'approx' || p.nextAppointment || p.status) &&
-          h(
+        h(
             'span',
             { class: 'badges' },
-            p.status && h('span', { class: 'badge badge-soft', style: { '--badge': color } }, p.status),
+            kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
+            h('span', { class: 'badge badge-soft', style: { '--badge': color } }, STATE_LABEL[stateKeyOf(p)]),
+            isDue && h('span', { class: 'badge badge-due' }, 'Besuch fällig'),
             p.needsReview && h('span', { class: 'badge badge-review' }, 'prüfen'),
             noPin && h('span', { class: 'badge badge-warn' }, 'kein Pin'),
             p.geoStatus === 'approx' && h('span', { class: 'badge badge-warn' }, 'Pin ungenau'),
@@ -213,7 +218,7 @@ export function openFilterSheet(): void {
           'button',
           {
             class: ['chip-toggle', active.has(o.key) && 'on'],
-            style: { '--chip': colorForStatus(o.key, store.settings.statusColors) },
+            style: { '--chip': stateColor(o.key, store.settings) },
             onclick: () => {
               if (active.has(o.key)) active.delete(o.key);
               else active.add(o.key);
@@ -244,15 +249,43 @@ export function openFilterSheet(): void {
     h('option', { value: 'kauft', selected: f.productState === 'kauft' }, 'kauft'),
   );
 
+  const kindChips = h('div', { class: 'chip-select' });
+  const renderKinds = () => {
+    const active = new Set(filterState.filter.kinds ?? []);
+    const counts = { praxis: 0, klinik: 0 };
+    store.practiceList().forEach((p) => counts[kindOf(p)]++);
+    setChildren(
+      kindChips,
+      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
+        h(
+          'button',
+          {
+            class: ['chip-toggle', active.has(k) && 'on'],
+            onclick: () => {
+              if (active.has(k)) active.delete(k);
+              else active.add(k);
+              filterState.update({ kinds: [...active] });
+              renderKinds();
+            },
+          },
+          `${KIND_PLURAL[k]} (${counts[k]})`,
+        ),
+      ),
+    );
+  };
+  renderKinds();
+
   const sheet = openSheet({
     title: 'Filter',
     content: [
+      h('h3', { class: 'sheet-section' }, 'Art'),
+      kindChips,
       h('h3', { class: 'sheet-section' }, 'Status'),
       statusChips,
       h('h3', { class: 'sheet-section' }, 'Besonderes'),
       toggle('Nur „prüfen“ (gelb markiert)', f.onlyReview, (v) => filterState.update({ onlyReview: v })),
       toggle('Standort fehlt oder ungenau', f.locationProblem, (v) => filterState.update({ locationProblem: v })),
-      toggle(`Lange nicht besucht (> ${store.settings.staleDays} Tage)`, f.stale, (v) => filterState.update({ stale: v })),
+      toggle('Besuch fällig (laut Besuchsintervall)', f.stale, (v) => filterState.update({ stale: v })),
       toggle('Mit geplantem Termin', f.hasAppointment, (v) => filterState.update({ hasAppointment: v })),
       field(
         'Gebiet',

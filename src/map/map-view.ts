@@ -24,7 +24,8 @@ import type { Practice, PlzFeature } from '../types';
 import { debounce, h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { practiceColor, stateColor, type StateKey } from '../utils/customer';
+import { kindOf } from '../utils/kind';
 import { plural } from '../utils/text';
 import { formatDateShort } from '../utils/dates';
 import { formatTime } from '../tour/opening-hours';
@@ -91,8 +92,9 @@ export class MapView {
     }).addTo(this.map);
 
     this.cluster = L.markerClusterGroup({
-      maxClusterRadius: 45,
-      disableClusteringAtZoom: 14,
+      // Ab Zoomstufe 15 nur noch (fast) gleiche Standorte bündeln – z. B. mehrere Praxen
+      // in einem Ärztehaus. Antippen fächert sie auf („spiderfy“).
+      maxClusterRadius: (zoom: number) => (zoom >= 15 ? 12 : 45),
       showCoverageOnHover: false,
       spiderfyOnMaxZoom: true,
       chunkedLoading: true,
@@ -316,8 +318,8 @@ export class MapView {
   // ---------- Pins ----------
 
   private pinIcon(p: Practice): L.DivIcon {
-    const color = colorForStatus(p.status, store.settings.statusColors);
-    const cls = ['pin', p.needsReview && 'pin-review', p.geoStatus === 'approx' && 'pin-approx']
+    const color = practiceColor(p, store.settings);
+    const cls = ['pin', kindOf(p) === 'klinik' && 'pin-klinik', p.needsReview && 'pin-review', p.geoStatus === 'approx' && 'pin-approx']
       .filter(Boolean)
       .join(' ');
     return L.divIcon({
@@ -465,7 +467,7 @@ export class MapView {
       const p = store.getPractice(e.practiceId);
       if (!p || p.lat === undefined || p.lng === undefined) continue;
       const done = store.visitsFor(p.id).some((v) => v.date === date);
-      const color = colorForStatus(p.status, store.settings.statusColors);
+      const color = practiceColor(p, store.settings);
       const m = L.marker([p.lat, p.lng], {
         icon: L.divIcon({
           className: 'tour-pin-wrap',
@@ -645,7 +647,7 @@ export class MapView {
       return;
     }
     const active = new Set(filterState.filter.statuses);
-    const toggle = (key: string) => {
+    const toggle = (key: StateKey) => {
       const next = new Set(active);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -670,13 +672,16 @@ export class MapView {
               h(
                 'button',
                 { class: ['legend-item', active.size > 0 && !active.has(o.key) && 'off'], onclick: () => toggle(o.key) },
-                h('span', { class: 'dot', style: { background: colorForStatus(o.key, store.settings.statusColors) } }),
+                h('span', { class: 'dot', style: { background: stateColor(o.key, store.settings) } }),
                 h('span', { class: 'legend-label' }, o.label),
                 h('span', { class: 'legend-count' }, String(o.count)),
               ),
             ),
           ),
           h('li', { class: 'legend-hint' }, h('span', { class: 'pin-mini pin-review' }), 'gelber Rand = prüfen'),
+          store.practiceList().some((p) => kindOf(p) === 'klinik')
+            ? h('li', { class: 'legend-hint' }, h('span', { class: 'pin-mini pin-mini-klinik' }), 'Quadrat = Klinik')
+            : null,
         ),
     );
   }

@@ -9,6 +9,7 @@ import { getDb } from '../db/database';
 import { DEFAULT_TERRITORY_PLZ } from '../data/territory';
 import type { BackupFile, PlzFeature, Practice, Product, Settings, Tour, TourDefaults, Visit } from '../types';
 import { nowIso } from '../utils/id';
+import { mergeRecords } from './duplicates';
 
 export type ChangeKind = 'practices' | 'visits' | 'products' | 'settings' | 'shapes' | 'territory' | 'tours';
 type Listener = (kinds: Set<ChangeKind>) => void;
@@ -24,6 +25,7 @@ export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
   parkMinutes: 5,
   visitMinutes: 15,
   trafficPercent: 15,
+  maxVisits: 10,
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,12 +34,19 @@ export const DEFAULT_SETTINGS: Settings = {
   staleDays: 90,
   backupReminderDays: 7,
   tourDefaults: { ...DEFAULT_TOUR_SETTINGS },
+  // Standard-Besuchsintervall in Tagen je Kundenstatus
+  intervalDefaults: { aktiv: 28, prozess: 14, kein: 90, offen: 60 },
 };
 
 /** Gespeicherte Einstellungen mit Standardwerten ergänzen (auch für neue Felder). */
 export function withDefaults(saved: Partial<Settings> | undefined): Settings {
   const base = structuredClone(DEFAULT_SETTINGS);
-  return { ...base, ...(saved ?? {}), tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) } };
+  return {
+    ...base,
+    ...(saved ?? {}),
+    tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) },
+    intervalDefaults: { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+  };
 }
 
 class Store {
@@ -145,6 +154,55 @@ class Store {
     visitIds.forEach((id) => this.visits.delete(id));
     await this.touch();
     this.emit('practices', 'visits');
+  }
+
+  /**
+   * Führt doppelte Einträge zusammen: `keepId` bleibt (mit ergänzten Angaben),
+   * Besuche und Tour-Stopps der anderen wandern dorthin, die anderen werden gelöscht.
+   */
+  async mergePractices(keepId: string, removeIds: string[]): Promise<void> {
+    const keep = this.practices.get(keepId);
+    const others = removeIds.map((id) => this.practices.get(id)).filter((p): p is Practice => !!p && p.id !== keepId);
+    if (!keep || !others.length) return;
+    const removed = new Set(others.map((p) => p.id));
+    const merged = { ...mergeRecords(keep, others), updatedAt: nowIso() };
+    const movedVisits = [...this.visits.values()]
+      .filter((v) => removed.has(v.practiceId))
+      .map((v) => ({ ...v, practiceId: keepId, updatedAt: nowIso() }));
+    const changedTours: Tour[] = [];
+    for (const t of this.tours.values()) {
+      if (!t.stops.some((s) => removed.has(s.practiceId))) continue;
+      const seen = new Set<string>();
+      const stops = t.stops
+        .map((s) => (removed.has(s.practiceId) ? { ...s, practiceId: keepId } : s))
+        .filter((s) => (seen.has(s.practiceId) ? false : (seen.add(s.practiceId), true)));
+      const next: Tour = { ...t, stops, updatedAt: nowIso() };
+      delete next.plan; // Reihenfolge muss neu berechnet werden
+      changedTours.push(next);
+    }
+
+    this.practices.set(keepId, merged);
+    removed.forEach((id) => this.practices.delete(id));
+    movedVisits.forEach((v) => this.visits.set(v.id, v));
+    changedTours.forEach((t) => this.tours.set(t.id, t));
+
+    const db = await getDb();
+    const tx = db.transaction(['practices', 'visits', 'tours'], 'readwrite');
+    await Promise.all([
+      tx.objectStore('practices').put(merged),
+      ...[...removed].map((id) => tx.objectStore('practices').delete(id)),
+      ...movedVisits.map((v) => tx.objectStore('visits').put(v)),
+      ...changedTours.map((t) => tx.objectStore('tours').put(t)),
+      tx.done,
+    ]);
+    await this.touch();
+    this.emit('practices', 'visits', 'tours');
+  }
+
+  /** Einträge als „verschieden“ markieren – sie werden nicht mehr als doppelt gemeldet. */
+  async dismissDuplicates(pairKeys: string[]): Promise<void> {
+    const set = new Set([...(this.settings.dismissedDuplicates ?? []), ...pairKeys]);
+    await this.updateSettings({ dismissedDuplicates: [...set] });
   }
 
   // ---------- Besuche ----------
