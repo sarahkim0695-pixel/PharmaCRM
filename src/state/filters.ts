@@ -1,13 +1,15 @@
 /**
  * Filter und Sortierung für Liste UND Karte (beide zeigen dieselbe Auswahl).
  */
-import type { Practice, ProductState, Visit } from '../types';
+import type { FacilityKind, Practice, ProductState, Visit } from '../types';
+import { kindOf } from '../utils/kind';
 import { statusKey } from '../utils/colors';
 import { daysSince } from '../utils/dates';
 import { collator, normalize } from '../utils/text';
 
 export interface PracticeFilter {
   search: string;
+  kinds: FacilityKind[]; // Praxis / Klinik
   statuses: string[]; // Status-Schlüssel (siehe statusKey)
   cities: string[];
   specialties: string[];
@@ -44,6 +46,7 @@ export const SORT_LABELS: Record<SortKey, string> = {
 
 export const EMPTY_FILTER: PracticeFilter = {
   search: '',
+  kinds: [],
   statuses: [],
   cities: [],
   specialties: [],
@@ -67,6 +70,7 @@ export interface FilterContext {
 /** Wie viele Filter sind aktiv (ohne Suchtext)? */
 export function activeFilterCount(f: PracticeFilter): number {
   return (
+    (f.kinds?.length ? 1 : 0) +
     (f.statuses.length ? 1 : 0) +
     (f.cities.length ? 1 : 0) +
     (f.specialties.length ? 1 : 0) +
@@ -93,6 +97,7 @@ export function matchesFilter(p: Practice, f: PracticeFilter, ctx: FilterContext
     const words = normalize(f.search).split(' ').filter(Boolean);
     if (!words.every((w) => hay.includes(w))) return false;
   }
+  if (f.kinds?.length && !f.kinds.includes(kindOf(p))) return false;
   if (f.statuses.length && !f.statuses.includes(statusKey(p.status))) return false;
   if (f.cities.length && !f.cities.includes(p.city)) return false;
   if (f.specialties.length && !f.specialties.includes(p.specialty)) return false;

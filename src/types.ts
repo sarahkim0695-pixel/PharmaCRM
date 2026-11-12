@@ -11,12 +11,20 @@ export type GeoStatus =
   | 'not_found' // nicht gefunden – Pin bitte von Hand setzen
   | 'manual'; // Pin wurde von Hand gesetzt
 
+/** Art der Einrichtung */
+export type FacilityKind = 'praxis' | 'klinik';
+
 /** Was mit einem Produkt bei einer Praxis passiert ist. */
 export type ProductState = 'angeboten' | 'kauft';
 
+/**
+ * Eine Einrichtung – Praxis oder Klinik (Name „Practice“ aus historischen Gründen).
+ */
 export interface Practice {
   id: string;
-  name: string; // Spalte „Praxis“
+  /** Praxis oder Klinik (fehlt = Praxis) */
+  kind?: FacilityKind;
+  name: string; // Spalte „Praxis“ bzw. „Klinik“
   specialty: string; // „Fachrichtung“
   street: string; // „Straße“
   plz: string; // „PLZ“ (immer 5-stellig als Text)
@@ -102,6 +110,8 @@ export interface Settings {
   tourDefaults: TourDefaults;
   /** Datum der Tour, die gerade geplant wird (für „Zur Tour hinzufügen“) */
   activeTourDate?: string;
+  /** Paare von Einträgen, die als „verschieden, kein Duplikat“ markiert wurden („idA|idB“) */
+  dismissedDuplicates?: string[];
   /** Wurde der Willkommens-Hinweis schon gezeigt? */
   onboardingDone?: boolean;
 }

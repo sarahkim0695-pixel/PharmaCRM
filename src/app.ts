@@ -20,6 +20,7 @@ import { visitsView } from './views/visits-view';
 import { productsSection, productsView } from './views/products-view';
 import { backupView, startBackupReminder } from './views/backup-view';
 import { tourView } from './views/tour-view';
+import { duplicatesView } from './views/duplicates-view';
 
 /** Seiten-Fabriken je Route. Neue Seiten hier eintragen. */
 const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
@@ -38,6 +39,7 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
   products: productsView,
   backup: backupView,
   tour: tourView,
+  duplicates: duplicatesView,
 };
 
 /** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
@@ -74,6 +76,7 @@ const TAB_OF: Record<RouteName, Tab> = {
   backup: 'more',
   settings: 'more',
   help: 'more',
+  duplicates: 'more',
 };
 
 /** Banner-Bereich oben (z. B. Backup-Erinnerung) */

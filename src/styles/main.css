@@ -589,6 +589,24 @@ button.stat:disabled { opacity: 0.6; }
 }
 .popup-tour { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
 
+/* ---------- Kliniken & doppelte Standorte ---------- */
+
+.badge-kind { background: #e8e1f5; color: #4b2a85; }
+.dot-klinik { border-radius: 3px; }
+.pin-klinik { border-radius: 6px; transform: none; left: 7px; top: 5px; width: 22px; height: 22px; }
+.pin-klinik span { width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 0; background: none; }
+.pin-klinik span::before, .pin-klinik span::after { content: ''; position: absolute; background: #fff; }
+.pin-klinik span::before { left: 3.5px; top: 0; width: 3px; height: 10px; }
+.pin-klinik span::after { left: 0; top: 3.5px; width: 10px; height: 3px; }
+.pin-mini-klinik { border-radius: 3px; border-color: #fff; box-shadow: 0 0 0 1px #8a94a6; }
+.dup-card { border-left: 4px solid var(--warn); }
+.dup-reason { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--warn); margin-bottom: 8px; }
+.dup-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.dup-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 10px; border: 1px solid #edf0f4; margin-bottom: 6px; cursor: pointer; }
+.dup-item.keep { border-color: var(--ok); background: #f1faf4; }
+.dup-item input[type='radio'] { width: 24px; height: 24px; flex: none; accent-color: var(--ok); }
+.keep-label { font-weight: 700; color: var(--ok); font-size: 14px; }
+
 /* ---------- Menü ---------- */
 
 .menu { padding: 4px 16px; }

@@ -38,6 +38,7 @@ const FAKE_COORDS = {
   'rathausplatz 22': [47.7286, 10.3158],
   'konigstrasse 24': [47.8561, 12.1289],
   'karlsplatz 1': [48.1390, 11.5655],
+  'ismaninger strasse 22': [48.1371, 11.5996],
 };
 
 /** Falscher Routing-Server: Fahrzeit aus Luftlinie (wie die Schätzung in der App) */
@@ -135,7 +136,9 @@ try {
   await chooser.setFiles(fixture);
   await page.waitForSelector('text=Vorschau');
   const statsText = await page.locator('.stats').innerText();
-  assert.match(statsText, /9\s*Praxen in der Datei/);
+  assert.match(statsText, /9\s*Praxen/);
+  assert.match(statsText, /2\s*Kliniken/);
+  assert.match(statsText, /1\s*doppelte Zeilen aussortiert/);
   assert.match(statsText, /4\s*gelb/);
   await shot('03-import-vorschau');
   await page.getByRole('button', { name: 'Importieren' }).click();
@@ -159,8 +162,9 @@ try {
   // 6. Liste: Suche, Filter „prüfen“
   await page.goto(`${BASE}#/liste`);
   await page.waitForSelector('.prow');
-  assert.equal(await page.locator('.prow').count(), 9);
+  assert.equal(await page.locator('.prow').count(), 11);
   assert.equal(await page.locator('.prow .badge-review').count(), 4);
+  assert.equal(await page.locator('.prow .badge-kind').count(), 2); // Kliniken
   await page.fill('.search-input', 'passau');
   await page.waitForTimeout(400);
   assert.equal(await page.locator('.prow').count(), 1);
@@ -215,7 +219,7 @@ try {
   assert.match(await page.locator('.appt-side').first().innerText(), /14:30/);
   await shot('11-besuche-termine');
   await page.getByRole('tab', { name: 'Lange nicht besucht' }).click();
-  assert.equal(await page.locator('.plist .prow').count(), 9); // alle außer der gerade besuchten
+  assert.equal(await page.locator('.plist .prow').count(), 11); // alle außer der gerade besuchten
   await shot('12-besuche-lange');
   await page.getByRole('tab', { name: 'Verlauf' }).click();
   await page.waitForSelector('.visit-practice:has-text("Testpraxis Neu")');
@@ -250,7 +254,7 @@ try {
   await download.saveAs(backupPath);
   assert.match(download.suggestedFilename(), /^RepMap-Backup-\d{4}-\d{2}-\d{2}\.json$/);
   const backup = JSON.parse((await import('node:fs')).readFileSync(backupPath, 'utf8'));
-  assert.equal(backup.practices.length, 10);
+  assert.equal(backup.practices.length, 12);
   assert.equal(backup.products.length, 2);
   await page.waitForSelector('.banner', { state: 'detached' });
 
@@ -270,7 +274,7 @@ try {
   await page.goto(`${BASE}#/liste`);
   await page.fill('.search-input', '');
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('.prow').count(), 10);
+  assert.equal(await page.locator('.prow').count(), 12);
   await page.locator('.prow', { hasText: 'Testpraxis Neu' }).click();
   await page.waitForSelector('[aria-label="Wundauflage A"] .seg-kauft.on');
   await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
@@ -325,6 +329,33 @@ try {
   // 18. „Zur Tour“ aus der Kurzinfo einer Praxis
   await page.goto(`${BASE}#/karte`);
   await page.waitForTimeout(500);
+
+  // 19. Doppelte Standorte prüfen
+  await page.goto(`${BASE}#/doppelte`);
+  await page.waitForSelector('.dup-card');
+  assert.equal(await page.locator('.dup-card').count(), 2); // Landshut (Praxis + Klinik) und Marienplatz 8
+  await shot('20-doppelte');
+  // Landshut: verschiedene Einrichtungen
+  await page.locator('.dup-card', { hasText: 'Klinik am Rathaus' }).getByRole('button', { name: 'Sind verschieden' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.dup-card').length === 1);
+  // Marienplatz: zusammenführen (Testpraxis Neu hat Besuch + Produkte → bleibt)
+  const card = page.locator('.dup-card', { hasText: 'Testpraxis Neu' });
+  assert.match(await card.locator('.dup-item.keep').innerText(), /Testpraxis Neu/);
+  await card.getByRole('button', { name: 'Zusammenführen' }).click();
+  await page.locator('dialog').getByRole('button', { name: 'Zusammenführen' }).click();
+  await page.waitForSelector('text=Keine doppelten Standorte');
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', '');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.prow').count(), 11);
+  assert.equal(await page.locator('.prow', { hasText: 'Anna Beispiel' }).count(), 0);
+
+  // 20. Klinik von Hand anlegen
+  await page.goto(`${BASE}#/praxis/neu`);
+  await page.getByRole('button', { name: 'Klinik', exact: true }).click();
+  await page.fill('input[name=name]', 'Kreisklinik Test');
+  await page.getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('.page-head h1:has-text("Klinik")');
 
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');

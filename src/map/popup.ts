@@ -7,6 +7,7 @@ import { iconEl } from '../ui/icons';
 import { colorForStatus, statusLabel } from '../utils/colors';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { appleMapsUrl, fullAddress } from '../utils/maps';
+import { KIND_LABEL, kindOf } from '../utils/kind';
 import { addPracticeToTour } from '../views/tour-view';
 
 export function statusBadge(p: Practice) {
@@ -24,7 +25,7 @@ export function buildPopup(p: Practice): HTMLElement {
     'div',
     { class: 'popup' },
     h('div', { class: 'popup-title' }, p.name),
-    p.specialty && h('div', { class: 'popup-sub' }, p.specialty),
+    h('div', { class: 'popup-sub' }, [kindOf(p) === 'klinik' ? KIND_LABEL.klinik : '', p.specialty].filter(Boolean).join(' · ')),
     h('div', { class: 'popup-addr' }, fullAddress(p)),
     h(
       'div',

@@ -11,6 +11,7 @@ import { toast } from '../ui/toast';
 import { appleMapsUrl, fullAddress, telUrl } from '../utils/maps';
 import { emptyState, pageHeader, section, type View } from './common';
 import { addPracticeToTour } from './tour-view';
+import { KIND_LABEL, kindOf } from '../utils/kind';
 
 /**
  * Weitere Abschnitte (Termine, Besuche, Produkte) melden sich hier an,
@@ -35,7 +36,7 @@ export function practiceView(route: Route): View {
     setChildren(
       el,
       pageHeader({
-        title: 'Praxis',
+        title: KIND_LABEL[kindOf(p)],
         back: '/liste',
         actions: h('button', { class: 'btn btn-sm', onclick: () => navigate(`/praxis/${p.id}/bearbeiten`) }, iconEl('edit', 18), 'Bearbeiten'),
       }),
@@ -45,7 +46,7 @@ export function practiceView(route: Route): View {
       h(
         'div',
         { class: 'danger-zone' },
-        h('button', { class: 'btn btn-danger-outline', onclick: () => void deletePractice(p) }, iconEl('trash', 18), 'Praxis löschen'),
+        h('button', { class: 'btn btn-danger-outline', onclick: () => void deletePractice(p) }, iconEl('trash', 18), `${KIND_LABEL[kindOf(p)]} löschen`),
       ),
     );
   }
@@ -123,7 +124,7 @@ function locationCard(p: Practice): HTMLElement {
 async function deletePractice(p: Practice): Promise<void> {
   const visits = store.visitsFor(p.id).length;
   const ok = await confirmDialog({
-    title: 'Praxis löschen?',
+    title: `${KIND_LABEL[kindOf(p)]} löschen?`,
     message: `„${p.name}“${visits ? ` und ${visits} erfasste Besuche` : ''} werden endgültig gelöscht.`,
     confirmLabel: 'Löschen',
     danger: true,

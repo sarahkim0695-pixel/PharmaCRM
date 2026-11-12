@@ -6,6 +6,8 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | Funktion | Was sie kann |
 | --- | --- |
 | 🗺️ **Gebietskarte** | Dein Gebiet als gelbe PLZ-Flächen (Ober-/Niederbayern, Schwaben). PLZ per Antippen oder als Liste hinzufügen/entfernen. |
+| 🏥 **Kliniken** | Neben Praxen auch Kliniken – eigener Pin (Quadrat mit Kreuz), Filter, Import über Spalte „Typ“ oder eigenes Tabellenblatt. |
+| 🧹 **Doppelte Standorte** | Doppelte Zeilen werden beim Import aussortiert; unklare Fälle (gleiche Adresse/gleicher Name) zum Prüfen und Zusammenführen. |
 | 📋 **Praxen** | Excel-Import (`.xlsx`), automatische Adresssuche, gelb markierte Zeilen erscheinen als **„prüfen“**. Pin von Hand setzen, wenn eine Adresse nicht gefunden wird. |
 | 📍 **Pins** | Farbe nach Status (Kunde = grün, kein Kunde = rot, weitere Status mit eigener Farbe). Antippen: Kurzinfo, Route in Apple Karten, Details. |
 | 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. |
@@ -70,6 +72,8 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 
 - Eine Spalte **Telefon** wird zusätzlich übernommen, wenn vorhanden.
 - Für die **Tourplanung** (alles optional – siehe nächster Abschnitt): **Öffnungszeiten**, **Parken (Min)**, **Vor Ort (Min)**.
+- **Kliniken** (siehe unten): Spalte **Typ** mit „Praxis“ oder „Klinik“ – oder ein eigenes Tabellenblatt „Kliniken“.
+- **Doppelte Zeilen** (gleicher Name und gleiche Adresse) werden automatisch nur einmal übernommen.
 - **Gelb hinterlegte Zeilen** (auch hellgelb oder goldgelb, ganze Zeile oder einzelne Zelle) werden als **„prüfen“** markiert.
   In der Praxis-Ansicht kannst du sie später mit **„Geprüft“** bestätigen.
 - Die Datei muss im Format **.xlsx** sein (in Excel: *Speichern unter → Excel-Arbeitsmappe*).
@@ -78,6 +82,23 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 
 Nach dem Import sucht die App die Adressen auf der Karte (über OpenStreetMap, **höchstens 1 Adresse pro Sekunde** – bei 300 Praxen also ca. 5–10 Minuten). Lass die App dabei geöffnet; sonst macht sie beim nächsten Öffnen weiter.
 Nicht gefundene Adressen findest du unter **Mehr → Adresssuche** oder in der Liste mit dem Filter „Standort fehlt oder ungenau“. Dort tippst du auf **„Pin setzen“** und dann auf die richtige Stelle in der Karte.
+
+#### Kliniken
+
+Du hast zwei Möglichkeiten – beide in derselben Excel-Datei:
+
+1. **Eigenes Tabellenblatt** mit dem Namen „Kliniken“ (gleiche Spalten wie bei den Praxen; die erste Spalte darf statt „Praxis“ auch „Klinik“ oder „Name“ heißen). Die App liest **alle Blätter** der Datei ein.
+2. **Spalte „Typ“** mit „Praxis“ oder „Klinik“ in derselben Liste.
+
+Steht nichts dabei, erkennt die App Kliniken am Namen („Klinik“, „Klinikum“, „Krankenhaus“). Die Art lässt sich in der App jederzeit ändern (Bearbeiten → Praxis/Klinik). Wenn du später nur die Klinikliste neu importierst, schlägt die App keine Praxen zum Löschen vor.
+
+#### Doppelte Standorte
+
+- **Gleicher Name + gleiche Adresse** (auch über mehrere Blätter hinweg): wird beim Import automatisch nur einmal übernommen. Die Vorschau zeigt, welche Zeilen aussortiert wurden.
+- **Gleiche Adresse, aber anderer Name**, gleicher Name im selben PLZ-Gebiet oder gleiche Position auf der Karte: Das kann ein echter Doppelter sein – oder mehrere Praxen im selben Ärztehaus. Deshalb löscht die App hier **nichts automatisch**, sondern sammelt die Fälle unter **Mehr → Doppelte Standorte**:
+  - **Zusammenführen**: Ein Eintrag bleibt (vorausgewählt ist der mit den meisten Besuchen/Angaben). Besuche, Produkte, Hinweise, Termine und Tour-Stopps der anderen werden übernommen.
+  - **Sind verschieden**: Die Einträge werden nicht mehr als doppelt gemeldet.
+- Auf der Karte werden Einträge am selben Ort gebündelt – Antippen fächert sie auf.
 
 #### Öffnungszeiten und Zeitaufwand in der Excel
 
@@ -174,7 +195,9 @@ src/
   db/database.ts          IndexedDB-Schema (bei Änderungen DB_VERSION erhöhen + upgrade ergänzen)
   state/store.ts          Zentraler Datenspeicher (lädt alles in den Speicher, schreibt nach IndexedDB)
   state/filters.ts        Filter & Sortierung (gemeinsam für Liste und Karte)
-  state/selectors.ts      Abgeleitete Daten (gefilterte Liste, Status-Übersicht)
+  state/selectors.ts      Abgeleitete Daten (gefilterte Liste, Status-Übersicht, doppelte Standorte)
+  state/duplicates.ts     Doppelte Standorte finden (Adresse, Name, Position) und zusammenführen
+  utils/kind.ts           Praxis/Klinik: Bezeichnungen und automatische Erkennung
   import/xlsx-reader.ts   Excel-Leser inkl. Farberkennung (gelb = „prüfen“)
   import/practice-import.ts  Spalten erkennen, Zeilen lesen, mit vorhandenen Praxen zusammenführen
   geo/geocoder.ts         Adresssuche (Nominatim) mit Warteschlange, 1 Anfrage/s, Zwischenspeicher
@@ -195,7 +218,7 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 

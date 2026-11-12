@@ -10,7 +10,7 @@ import { relativeDays } from '../utils/dates';
 import { plural } from '../utils/text';
 import { toast } from '../ui/toast';
 import { menuItem, pageHeader, section, field, type View } from './common';
-import { statusOptions } from '../state/selectors';
+import { duplicateGroups, statusOptions } from '../state/selectors';
 import { APP_VERSION } from '../version';
 import { tourSettingsSection } from './tour-settings';
 
@@ -31,6 +31,10 @@ export function moreView(): View {
         'nav',
         { class: 'menu card' },
         menuItem({ icon: 'upload', label: 'Excel importieren', sub: 'Praxisliste_Gebiet.xlsx einlesen', href: '#/import' }),
+        (() => {
+          const dups = duplicateGroups().length;
+          return menuItem({ icon: 'layers', label: 'Doppelte Standorte', sub: dups ? `${plural(dups, 'Fall', 'Fälle')} zu prüfen` : 'keine gefunden', href: '#/doppelte' });
+        })(),
         menuItem({ icon: 'area', label: 'Mein Gebiet', sub: plural(store.settings.territoryPlz.length, 'PLZ', 'PLZ'), href: '#/gebiet' }),
         menuItem({ icon: 'box', label: 'Produkte', sub: plural(store.productList().length, 'Produkt', 'Produkte'), href: '#/produkte' }),
         menuItem({

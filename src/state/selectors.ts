@@ -2,6 +2,7 @@
 import type { Practice } from '../types';
 import { statusKey } from '../utils/colors';
 import { collator } from '../utils/text';
+import { findDuplicates, type DuplicateGroup } from './duplicates';
 import { filterState, matchesFilter, sortPractices, type FilterContext } from './filters';
 import { store } from './store';
 
@@ -44,4 +45,9 @@ export function distinctValues(field: 'city' | 'specialty' | 'plz' | 'status'): 
   const set = new Set<string>();
   for (const p of store.practices.values()) if (p[field]) set.add(p[field]);
   return [...set].sort(collator.compare);
+}
+
+/** Mögliche doppelte Standorte (ohne die als „verschieden“ markierten). */
+export function duplicateGroups(): DuplicateGroup[] {
+  return findDuplicates(store.practiceList(), new Set(store.settings.dismissedDuplicates ?? []));
 }

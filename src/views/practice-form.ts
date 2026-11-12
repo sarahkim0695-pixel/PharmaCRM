@@ -4,8 +4,9 @@ import { allShapes } from '../geo/plz-data';
 import { goBack, navigate, type Route } from '../router';
 import { distinctValues } from '../state/selectors';
 import { store } from '../state/store';
-import type { Practice } from '../types';
-import { h } from '../ui/dom';
+import type { FacilityKind, Practice } from '../types';
+import { h, setChildren } from '../ui/dom';
+import { KIND_LABEL } from '../utils/kind';
 import { toast } from '../ui/toast';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -25,6 +26,17 @@ export function practiceFormView(route: Route): View {
     h('input', { name, value, autocomplete: 'off', ...extra });
 
   const name = input('name', p.name, { required: true, placeholder: 'z. B. Praxis Dr. Muster' });
+  // Art: Praxis oder Klinik
+  let kind: FacilityKind = p.kind ?? (route.query.get('art') === 'klinik' ? 'klinik' : 'praxis');
+  const kindSeg = h('div', { class: 'segmented' });
+  const renderKind = () =>
+    setChildren(
+      kindSeg,
+      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
+        h('button', { type: 'button', class: ['seg', kind === k && 'on'], onclick: () => { kind = k; renderKind(); } }, KIND_LABEL[k]),
+      ),
+    );
+  renderKind();
   const specialty = input('specialty', p.specialty, { list: 'dl-specialty', placeholder: 'z. B. Allgemeinmedizin' });
   const street = input('street', p.street, { placeholder: 'Straße und Hausnummer' });
   const plz = input('plz', p.plz, { inputmode: 'numeric', maxlength: 5, pattern: '\\d{5}', placeholder: '80331' });
@@ -46,7 +58,8 @@ export function practiceFormView(route: Route): View {
   const form = h(
     'form',
     { class: 'form card', onsubmit: (e: Event) => { e.preventDefault(); void save(); } },
-    field('Praxis *', name),
+    kindSeg,
+    field('Name *', name),
     field('Fachrichtung', specialty),
     field('Straße', street),
     h('div', { class: 'grid-2' }, field('PLZ', plz), field('Ort', city)),
@@ -85,6 +98,7 @@ export function practiceFormView(route: Route): View {
       updatedAt: ts,
       geoStatus: 'pending',
       ...existing,
+      kind,
       name: name.value.trim(),
       specialty: specialty.value.trim(),
       street: street.value.trim(),
@@ -113,7 +127,7 @@ export function practiceFormView(route: Route): View {
     else goBack(`/praxis/${next.id}`);
   }
 
-  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neue Praxis' : 'Praxis bearbeiten', back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
+  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neuer Eintrag' : `${KIND_LABEL[p.kind ?? 'praxis']} bearbeiten`, back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
   if (isNew) requestAnimationFrame(() => name.focus());
   return { el };
 }

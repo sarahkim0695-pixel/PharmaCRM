@@ -10,7 +10,8 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { colorForStatus } from '../utils/colors';
 import { formatDateShort, relativeDays } from '../utils/dates';
-import { plural } from '../utils/text';
+import { entityWord, KIND_LABEL, KIND_PLURAL, kindOf } from '../utils/kind';
+import type { FacilityKind } from '../types';
 import { emptyState, field, pageHeader, type View } from './common';
 
 const PAGE_SIZE = 150;
@@ -52,7 +53,7 @@ export function listView(route: Route): View {
     'div',
     { class: 'page page-list' },
     pageHeader({
-      title: 'Praxen',
+      title: store.practiceList().some((p) => kindOf(p) === 'klinik') ? 'Praxen & Kliniken' : 'Praxen',
       actions: h('button', { class: 'icon-btn', 'aria-label': 'Praxis anlegen', onclick: () => navigate('/praxis/neu') }, iconEl('plus', 26)),
     }),
     h('div', { class: 'list-tools' }, h('div', { class: 'searchbox' }, iconEl('search', 20), search), h('div', { class: 'row' }, filterBtn, sortSelect)),
@@ -70,8 +71,8 @@ export function listView(route: Route): View {
 
     const items = listPractices();
     const total = store.practices.size;
-    count.textContent =
-      items.length === total ? plural(total, 'Praxis', 'Praxen') : `${items.length} von ${plural(total, 'Praxis', 'Praxen')}`;
+    const clinics = store.practiceList().some((p) => kindOf(p) === 'klinik');
+    count.textContent = items.length === total ? entityWord(total, clinics) : `${items.length} von ${entityWord(total, clinics)}`;
 
     if (!total) {
       setChildren(
@@ -110,6 +111,7 @@ export function listView(route: Route): View {
     const statusLabels = new Map(statusOptions().map((o) => [o.key, o.label]));
     setChildren(
       chips,
+      (f.kinds ?? []).map((k) => chip(KIND_PLURAL[k], () => filterState.update({ kinds: f.kinds.filter((x) => x !== k) }))),
       f.statuses.map((s) => chip(statusLabels.get(s) ?? s, () => filterState.update({ statuses: f.statuses.filter((x) => x !== s) }))),
       f.cities.map((c) => chip(c, () => filterState.update({ cities: f.cities.filter((x) => x !== c) }))),
       f.specialties.map((c) => chip(c, () => filterState.update({ specialties: f.specialties.filter((x) => x !== c) }))),
@@ -155,16 +157,17 @@ function row(p: Practice): HTMLElement {
     h(
       'a',
       { class: 'prow', href: `#/praxis/${p.id}` },
-      h('span', { class: 'dot', style: { background: color }, title: p.status }),
+      h('span', { class: ['dot', kindOf(p) === 'klinik' && 'dot-klinik'], style: { background: color }, title: p.status }),
       h(
         'span',
         { class: 'prow-main' },
         h('span', { class: 'prow-title' }, p.name),
         h('span', { class: 'prow-sub' }, [p.specialty, `${p.plz} ${p.city}`.trim()].filter(Boolean).join(' · ')),
-        (p.needsReview || noPin || p.geoStatus === 'approx' || p.nextAppointment || p.status) &&
+        (p.needsReview || noPin || p.geoStatus === 'approx' || p.nextAppointment || p.status || kindOf(p) === 'klinik') &&
           h(
             'span',
             { class: 'badges' },
+            kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
             p.status && h('span', { class: 'badge badge-soft', style: { '--badge': color } }, p.status),
             p.needsReview && h('span', { class: 'badge badge-review' }, 'prüfen'),
             noPin && h('span', { class: 'badge badge-warn' }, 'kein Pin'),
@@ -244,9 +247,37 @@ export function openFilterSheet(): void {
     h('option', { value: 'kauft', selected: f.productState === 'kauft' }, 'kauft'),
   );
 
+  const kindChips = h('div', { class: 'chip-select' });
+  const renderKinds = () => {
+    const active = new Set(filterState.filter.kinds ?? []);
+    const counts = { praxis: 0, klinik: 0 };
+    store.practiceList().forEach((p) => counts[kindOf(p)]++);
+    setChildren(
+      kindChips,
+      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
+        h(
+          'button',
+          {
+            class: ['chip-toggle', active.has(k) && 'on'],
+            onclick: () => {
+              if (active.has(k)) active.delete(k);
+              else active.add(k);
+              filterState.update({ kinds: [...active] });
+              renderKinds();
+            },
+          },
+          `${KIND_PLURAL[k]} (${counts[k]})`,
+        ),
+      ),
+    );
+  };
+  renderKinds();
+
   const sheet = openSheet({
     title: 'Filter',
     content: [
+      h('h3', { class: 'sheet-section' }, 'Art'),
+      kindChips,
       h('h3', { class: 'sheet-section' }, 'Status'),
       statusChips,
       h('h3', { class: 'sheet-section' }, 'Besonderes'),

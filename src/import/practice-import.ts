@@ -7,12 +7,18 @@
  * Optional: Öffnungszeiten (eine Spalte „Öffnungszeiten“ ODER Spalten „Mo“, „Di“ …),
  * „Parken (Min)“ und „Vor Ort (Min)“ für den Zeitaufwand bei der Tourplanung.
  *
+ * Kliniken: Spalte „Typ“ (Praxis/Klinik) ODER eigenes Tabellenblatt „Kliniken“ –
+ * alle Blätter mit passender Kopfzeile werden eingelesen. Ohne Angabe wird die
+ * Art am Namen erkannt („Klinik“, „Klinikum“, „Krankenhaus“).
+ * Doppelte Zeilen (gleicher Name + gleiche Adresse) werden übersprungen.
+ *
  * Gelb hinterlegte Zeilen werden als „prüfen“ markiert.
  * Bei einem erneuten Import werden vorhandene Praxen aktualisiert (Besuche,
  * Produkte und Pins bleiben erhalten), neue kommen hinzu.
  */
 import { parseDayCell, parseOpeningHours } from '../tour/opening-hours';
-import type { Practice, WeekHours } from '../types';
+import type { FacilityKind, Practice, WeekHours } from '../types';
+import { detectKind, kindOf, type KindSource } from '../utils/kind';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
 import { isYellow, type CellValue, type SheetData } from './xlsx-reader';
@@ -28,11 +34,12 @@ export type Field =
   | 'phone'
   | 'hours'
   | 'park'
-  | 'visit';
+  | 'visit'
+  | 'kind';
 
 /** Mögliche Spaltenüberschriften je Feld – verglichen ohne Leer- und Sonderzeichen. */
 const HEADER_ALIASES: Record<Field, string[]> = {
-  name: ['praxis', 'praxisname', 'name', 'arzt', 'praxisarzt', 'einrichtung'],
+  name: ['praxis', 'praxisname', 'name', 'arzt', 'praxisarzt', 'einrichtung', 'einrichtungsname', 'klinik', 'klinikname', 'kliniken', 'krankenhaus'],
   specialty: ['fachrichtung', 'fachgebiet', 'fach', 'fachbereich'],
   street: ['strasse', 'str', 'adresse', 'anschrift', 'strassenr', 'strasseundhausnummer'],
   plz: ['plz', 'postleitzahl'],
@@ -43,6 +50,7 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   hours: ['offnungszeiten', 'offnungszeit', 'oeffnungszeiten', 'sprechzeiten', 'sprechzeit', 'praxiszeiten', 'sprechstunden'],
   park: ['parken', 'parkenweg', 'parkenundweg', 'parkzeit', 'parkenfussweg', 'weg', 'fussweg'],
   visit: ['vorort', 'aufenthalt', 'dauer', 'besuchsdauer', 'zeitaufwand', 'zeitvorort'],
+  kind: ['typ', 'art', 'einrichtungsart', 'einrichtungstyp', 'kategorie', 'praxisklinik', 'praxisoderklinik', 'typpraxisklinik'],
 };
 
 /** Spaltenüberschriften für einzelne Wochentage (Index 0 = Montag) */
@@ -75,10 +83,15 @@ export const FIELD_LABELS: Record<Field, string> = {
   hours: 'Öffnungszeiten',
   park: 'Parken (Min)',
   visit: 'Vor Ort (Min)',
+  kind: 'Typ (Praxis/Klinik)',
 };
 
 export interface ImportRow {
   rowNumber: number; // Zeilennummer wie in Excel (1-basiert)
+  sheetName?: string;
+  kind: FacilityKind;
+  /** Woher die Art stammt (bei „default“ wird eine in der App gesetzte Art nicht überschrieben) */
+  kindSource?: KindSource;
   name: string;
   specialty: string;
   street: string;
@@ -97,7 +110,17 @@ export interface ImportRow {
   visitMinutes?: number;
 }
 
+export interface SheetInfo {
+  name: string;
+  headerRowNumber: number;
+  columns: Partial<Record<Field, number>>;
+  rowCount: number;
+}
+
 export interface ImportPreview {
+  /** Alle eingelesenen Tabellenblätter */
+  sheets: SheetInfo[];
+  /** (erstes Blatt – für die Anzeige) */
   sheetName: string;
   headerRowNumber: number;
   columns: Partial<Record<Field, number>>;
@@ -111,6 +134,9 @@ export interface ImportPreview {
   hoursCount: number;
   /** Zeilen mit nicht lesbaren Öffnungszeiten */
   hoursProblems: { rowNumber: number; name: string; text: string }[];
+  /** Übersprungene doppelte Zeilen (gleicher Name + gleiche Adresse) */
+  duplicateRows: { sheetName: string; rowNumber: number; name: string; sameAsRow: number }[];
+  kindCounts: Record<FacilityKind, number>;
 }
 
 const cellText = (v: CellValue | undefined): string => {
@@ -156,20 +182,77 @@ export function parseMinutes(v: CellValue | undefined): number | undefined {
   return num ? Math.round(Number(num[0])) : undefined;
 }
 
-/** Sucht in allen Blättern die Kopfzeile (in den ersten 20 Zeilen) und liest die Praxen. */
-export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
-  for (const sheet of sheets) {
-    for (let r = 0; r < Math.min(20, sheet.rows.length); r++) {
-      const header = (sheet.rows[r] ?? []).map((c) => cellText(c?.value));
-      const columns = detectColumns(header);
-      if (columns.name !== undefined && (columns.plz !== undefined || columns.city !== undefined)) {
-        return readRows(sheet, r, columns, detectDayColumns(header));
-      }
+/** Kopfzeile eines Blatts suchen (in den ersten 20 Zeilen). */
+function findHeader(sheet: SheetData): { headerIdx: number; columns: Partial<Record<Field, number>>; header: string[] } | null {
+  for (let r = 0; r < Math.min(20, sheet.rows.length); r++) {
+    const header = (sheet.rows[r] ?? []).map((c) => cellText(c?.value));
+    const columns = detectColumns(header);
+    if (columns.name !== undefined && (columns.plz !== undefined || columns.city !== undefined)) {
+      return { headerIdx: r, columns, header };
     }
   }
-  throw new Error(
-    'Keine passende Kopfzeile gefunden. Die Tabelle braucht mindestens die Spalten „Praxis“ und „PLZ“ oder „Ort“.',
-  );
+  return null;
+}
+
+const rowKey = (r: { name: string; street: string; plz: string }) => `${normalize(r.name)}|${normalizeStreet(r.street)}|${r.plz}`;
+
+/** Liest alle Tabellenblätter mit passender Kopfzeile (z. B. „Praxen“ und „Kliniken“). */
+export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
+  const parts = sheets
+    .map((sheet) => {
+      const found = findHeader(sheet);
+      return found ? readRows(sheet, found.headerIdx, found.columns, detectDayColumns(found.header)) : null;
+    })
+    .filter((x): x is ReturnType<typeof readRows> => !!x);
+  if (!parts.length) {
+    throw new Error(
+      'Keine passende Kopfzeile gefunden. Die Tabelle braucht mindestens die Spalten „Praxis“ (oder „Klinik“/„Name“) und „PLZ“ oder „Ort“.',
+    );
+  }
+
+  // Doppelte Zeilen (gleicher Name + gleiche Adresse) aussortieren – auch blattübergreifend
+  const seen = new Map<string, ImportRow>();
+  const rows: ImportRow[] = [];
+  const duplicateRows: ImportPreview['duplicateRows'] = [];
+  for (const row of parts.flatMap((p) => p.rows)) {
+    const key = rowKey(row);
+    const first = seen.get(key);
+    if (first) {
+      duplicateRows.push({ sheetName: row.sheetName ?? '', rowNumber: row.rowNumber, name: row.name, sameAsRow: first.rowNumber });
+      // Angaben der doppelten Zeile nicht verlieren
+      first.needsReview ||= row.needsReview;
+      if (!first.openingHours && row.openingHours) Object.assign(first, { openingHours: row.openingHours, openingText: row.openingText });
+      if (!first.hint && row.hint) first.hint = row.hint;
+      if (!first.phone && row.phone) first.phone = row.phone;
+      continue;
+    }
+    seen.set(key, row);
+    rows.push(row);
+  }
+
+  const statusCounts = new Map<string, number>();
+  for (const r of rows) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+  const firstPart = parts[0];
+  const required: Field[] = ['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint'];
+  return {
+    sheets: parts.map((p) => ({ name: p.sheetName, headerRowNumber: p.headerRowNumber, columns: p.columns, rowCount: p.rows.length })),
+    sheetName: firstPart.sheetName,
+    headerRowNumber: firstPart.headerRowNumber,
+    columns: firstPart.columns,
+    dayColumns: firstPart.dayColumns,
+    missingColumns: required.filter((f) => firstPart.columns[f] === undefined),
+    rows,
+    skippedRows: parts.reduce((n, p) => n + p.skipped, 0),
+    reviewCount: rows.filter((r) => r.needsReview).length,
+    statusCounts,
+    hoursCount: rows.filter((r) => r.openingHours).length,
+    hoursProblems: parts.flatMap((p) => p.hoursProblems),
+    duplicateRows,
+    kindCounts: {
+      praxis: rows.filter((r) => r.kind === 'praxis').length,
+      klinik: rows.filter((r) => r.kind === 'klinik').length,
+    },
+  };
 }
 
 function readRows(
@@ -177,13 +260,12 @@ function readRows(
   headerIdx: number,
   columns: Partial<Record<Field, number>>,
   dayColumns: (number | undefined)[],
-): ImportPreview {
+) {
   const usedCols = Object.values(columns) as number[];
   const hasDayColumns = dayColumns.some((c) => c !== undefined);
   const hoursProblems: ImportPreview['hoursProblems'] = [];
   const rows: ImportRow[] = [];
   let skipped = 0;
-  const statusCounts = new Map<string, number>();
 
   for (let r = headerIdx + 1; r < sheet.rows.length; r++) {
     const cells = sheet.rows[r] ?? [];
@@ -195,8 +277,12 @@ function readRows(
     }
     const yellow =
       isYellow(sheet.rowFills[r]) || usedCols.some((c) => isYellow(cells[c]?.fill));
+    const kind = detectKind(name, get('kind'), sheet.name);
     const row: ImportRow = {
       rowNumber: r + 1,
+      sheetName: sheet.name,
+      kind: kind.kind,
+      kindSource: kind.source,
       name,
       specialty: get('specialty'),
       street: get('street'),
@@ -232,23 +318,9 @@ function readRows(
       }
     }
     rows.push(row);
-    statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1);
   }
 
-  const required: Field[] = ['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint'];
-  return {
-    sheetName: sheet.name,
-    headerRowNumber: headerIdx + 1,
-    columns,
-    missingColumns: required.filter((f) => columns[f] === undefined),
-    rows,
-    skippedRows: skipped,
-    reviewCount: rows.filter((r) => r.needsReview).length,
-    statusCounts,
-    dayColumns,
-    hoursCount: rows.filter((r) => r.openingHours).length,
-    hoursProblems,
-  };
+  return { sheetName: sheet.name, headerRowNumber: headerIdx + 1, columns, dayColumns, rows, skipped, hoursProblems };
 }
 
 // ---------- Zusammenführen mit vorhandenen Daten ----------
@@ -271,6 +343,7 @@ export function newPracticeFromRow(row: ImportRow): Practice {
   const ts = nowIso();
   return {
     id: newId(),
+    kind: row.kind,
     name: row.name,
     specialty: row.specialty,
     street: row.street,
@@ -310,6 +383,7 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
     byKey.set(k, [...(byKey.get(k) ?? []), p]);
   }
   const used = new Set<string>();
+  const kindsInFile = new Set(rows.map((r) => r.kind));
   const toSave: Practice[] = [];
   let added = 0;
   let updated = 0;
@@ -339,7 +413,10 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       needsReview: row.needsReview,
       // leere Zellen überschreiben nichts, was in der App gepflegt wurde
       ...timeFields(row),
+      // Art nur bei eindeutiger Angabe ändern (Spalte, Blatt, Name)
+      kind: row.kindSource === 'default' || (row.kind === 'praxis' && !match.kind) ? match.kind : row.kind,
     };
+    if (next.kind === undefined) delete next.kind;
     if (addressChanged) {
       next.geoStatus = 'pending';
       delete next.lat;
@@ -362,6 +439,8 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
     added,
     updated,
     unchanged,
-    notInFile: existing.filter((p) => !used.has(p.id) && p.source === 'import'),
+    // Nur Einträge derselben Art(en) als „fehlt in der Datei“ melden –
+    // eine reine Klinikliste soll keine Praxen zum Löschen vorschlagen
+    notInFile: existing.filter((p) => !used.has(p.id) && p.source === 'import' && kindsInFile.has(kindOf(p))),
   };
 }
