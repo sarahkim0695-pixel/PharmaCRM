@@ -4,15 +4,14 @@ import { store } from '../state/store';
 import type { Practice } from '../types';
 import { h } from '../ui/dom';
 import { iconEl } from '../ui/icons';
-import { colorForStatus, statusLabel } from '../utils/colors';
+import { practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { appleMapsUrl, fullAddress } from '../utils/maps';
 import { KIND_LABEL, kindOf } from '../utils/kind';
 import { addPracticeToTour } from '../views/tour-view';
 
 export function statusBadge(p: Practice) {
-  const color = colorForStatus(p.status, store.settings.statusColors);
-  return h('span', { class: 'badge', style: { '--badge': color } }, statusLabel(p.status));
+  return h('span', { class: 'badge', style: { '--badge': practiceColor(p, store.settings) } }, STATE_LABEL[stateKeyOf(p)]);
 }
 
 export function reviewBadge() {

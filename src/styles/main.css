@@ -557,6 +557,28 @@ button.stat:disabled { opacity: 0.6; }
 .pick.already { opacity: 0.5; }
 .page-tour .chips .muted { align-self: center; }
 
+/* Tour: Stopps mit Begründung und „Mitbringen“ */
+.stop-wrap { border-bottom: 1px solid #edf0f4; padding-bottom: 8px; }
+.stop-wrap.done { opacity: 0.55; }
+.stop-wrap .stop { border-bottom: none; }
+.stop-why { font-size: 13px; color: var(--muted); }
+.stop-main .prow-title .badge { margin-left: 6px; font-size: 11px; vertical-align: middle; }
+.stop-bring { display: flex; align-items: center; gap: 8px; padding-left: 40px; color: var(--muted); }
+.stop-bring .bring-input { min-height: 40px !important; padding: 6px 10px !important; font-size: 16px !important; background: #f7f9fc; }
+.tl-bring { font-size: 14px; color: #6a3a00; margin-top: 4px; }
+.region-chips { align-items: center; }
+.region-actions { margin-top: 8px; }
+.radius-select { width: auto !important; min-width: 190px; }
+
+/* Packliste */
+.pack-card > summary .card-title { font-size: 19px; }
+.pack-list { list-style: none; margin: 8px 0; padding: 0; }
+.pack-item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 4px; border-bottom: 1px solid #edf0f4; cursor: pointer; }
+.pack-item input[type='checkbox'] { width: 26px; height: 26px; flex: none; accent-color: var(--ok); }
+.pack-text { display: flex; flex-direction: column; font-size: 17px; }
+.pack-text small { font-size: 13px; color: var(--muted); }
+.pack-item.done .pack-text { text-decoration: line-through; color: var(--muted); }
+
 /* Tour auf der Karte */
 .tour-pin-wrap { background: none; border: none; }
 .tour-pin {
@@ -607,6 +629,33 @@ button.stat:disabled { opacity: 0.6; }
 .dup-item input[type='radio'] { width: 24px; height: 24px; flex: none; accent-color: var(--ok); }
 .keep-label { font-weight: 700; color: var(--ok); font-size: 14px; }
 
+/* ---------- Kundenstatus & Fälligkeit ---------- */
+
+.state-choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+@media (max-width: 480px) { .state-choice { grid-template-columns: 1fr; } }
+.state-btn {
+  --state: #8a94a6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.state-btn .dot { background: var(--state); }
+.state-btn.on { border-color: var(--state); background: color-mix(in srgb, var(--state) 10%, white); }
+.state-text { display: flex; flex-direction: column; line-height: 1.2; }
+.state-text small { color: var(--muted); font-size: 13px; }
+.due-line { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 15px; }
+.due-ok { background: #e7f6ed; color: #145c33; }
+.due-soon { background: #fff8d2; color: #5c4700; }
+.due-over { background: #fff0e0; color: #8a4700; }
+.due-never { background: #f1f3f6; color: var(--muted); }
+
 /* ---------- Menü ---------- */
 
 .menu { padding: 4px 16px; }
@@ -647,6 +696,9 @@ button.stat:disabled { opacity: 0.6; }
 .color-list { list-style: none; padding: 0; margin: 0; }
 .color-list li { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid #edf0f4; }
 .color-list input[type='color'] { width: 44px; height: 44px; border: none; background: none; padding: 0; }
+.color-list li { flex-wrap: wrap; }
+.color-list .interval-select { width: auto; min-width: 150px; }
+.badge-due { background: #fff0e0; color: #8a4700; border: 1px solid #f3c58b; }
 
 .plz-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .plz-chip {

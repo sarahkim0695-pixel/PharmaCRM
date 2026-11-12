@@ -80,6 +80,7 @@ export function tourSettingsSection(): HTMLElement {
       field('Abfahrt frühestens', time(d.dayStart, (v) => update({ dayStart: v }))),
       field('Feierabend spätestens', time(d.dayEnd, (v) => update({ dayEnd: v }))),
     ),
+    field('Höchstens Besuche pro Tag', num(d.maxVisits, 1, 40, (v) => update({ maxVisits: v }))),
     h('label', { class: 'switch-row' }, h('span', null, 'Am Ende zurück nach Hause'), h('input', { type: 'checkbox', class: 'switch', checked: d.returnHome, onchange: (e: Event) => update({ returnHome: (e.target as HTMLInputElement).checked }) })),
     h('h3', { class: 'sheet-section' }, 'Mittagspause'),
     h('label', { class: 'switch-row' }, h('span', null, 'Mittagspause einplanen'), h('input', { type: 'checkbox', class: 'switch', checked: d.lunchEnabled, onchange: (e: Event) => update({ lunchEnabled: (e.target as HTMLInputElement).checked }) })),

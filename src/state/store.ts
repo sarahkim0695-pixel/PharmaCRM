@@ -25,6 +25,7 @@ export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
   parkMinutes: 5,
   visitMinutes: 15,
   trafficPercent: 15,
+  maxVisits: 10,
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,12 +34,19 @@ export const DEFAULT_SETTINGS: Settings = {
   staleDays: 90,
   backupReminderDays: 7,
   tourDefaults: { ...DEFAULT_TOUR_SETTINGS },
+  // Standard-Besuchsintervall in Tagen je Kundenstatus
+  intervalDefaults: { aktiv: 28, prozess: 14, kein: 90, offen: 60 },
 };
 
 /** Gespeicherte Einstellungen mit Standardwerten ergänzen (auch für neue Felder). */
 export function withDefaults(saved: Partial<Settings> | undefined): Settings {
   const base = structuredClone(DEFAULT_SETTINGS);
-  return { ...base, ...(saved ?? {}), tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) } };
+  return {
+    ...base,
+    ...(saved ?? {}),
+    tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) },
+    intervalDefaults: { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+  };
 }
 
 class Store {

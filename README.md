@@ -13,8 +13,9 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. |
 | 📝 **Besuche** | Besuche mit Datum, Ansprechpartner und Notiz. Nächster Termin. Übersicht „Termine“, „lange nicht besucht“, „Verlauf“. |
 | 📦 **Produkte** | Eigene Produktliste. Pro Praxis: „angeboten“ oder „kauft“. |
+| 🤝 **Kundenstatus & Intervall** | Je Praxis: aktiver Kunde (bestellt), im Gespräch oder kein Kunde – und wie oft besucht werden soll. Die App zeigt, wann ein Besuch fällig ist. |
 | 🕘 **Öffnungszeiten** | Aus der Excel oder in der App: Öffnungszeiten je Wochentag und Zeitaufwand pro Praxis (Parken & Weg, vor Ort). |
-| 🚗 **Tourplanung** | Optimierte Tagestour mit Uhrzeiten: beachtet Öffnungszeiten, Termine, Fahrzeiten, deine Mittagspause und den Feierabend. |
+| 🚗 **Tourplanung** | Optimierte Tagestour mit Uhrzeiten: beachtet Öffnungszeiten, Termine, Fahrzeiten, deine Mittagspause und den Feierabend. Region wählen → Tour-Vorschlag; feste Praxen → passende Besuche auf der Strecke. Packliste für den Morgen. |
 | 🛡️ **Backup** | Alle Daten als Datei sichern und wiederherstellen. Erinnerung, wenn ein Backup fällig ist. |
 
 ---
@@ -74,6 +75,22 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 - Für die **Tourplanung** (alles optional – siehe nächster Abschnitt): **Öffnungszeiten**, **Parken (Min)**, **Vor Ort (Min)**.
 - **Kliniken** (siehe unten): Spalte **Typ** mit „Praxis“ oder „Klinik“ – oder ein eigenes Tabellenblatt „Kliniken“.
 - **Doppelte Zeilen** (gleicher Name und gleiche Adresse) werden automatisch nur einmal übernommen.
+- **Intervall** (optional): wie oft besucht werden soll, z. B. `4 Wochen`, `14 Tage`, `monatlich`, `Quartal`.
+
+#### Kundenstatus
+
+Aus der Spalte **Status** macht die App einen von drei Kundenstatus – die Vorschau zeigt, wie sie jeden Wert zuordnet:
+
+| In der Excel z. B. | wird zu |
+| --- | --- |
+| Kunde, Stammkunde, bestellt | **Aktiver Kunde** (grün) |
+| Interessent, im Gespräch, Angebot, Muster, Test | **Im Gespräch** (orange) |
+| kein Kunde, inaktiv, abgesagt | **Kein Kunde** (rot) |
+| alles andere | **Status offen** (grau) – in der App antippen |
+
+In der Praxis-Ansicht änderst du den Status mit einem Tipp. Dieser bleibt erhalten, auch wenn du die Excel erneut importierst – außer der Status in der Excel hat sich inzwischen geändert.
+
+**Besuchsintervall:** In der Praxis-Ansicht „Besuchen alle …“ wählen (1 Woche bis 6 Monate) – oder den Standard je Kundenstatus nutzen (*Mehr → Einstellungen*, anfangs: aktiv 4 Wochen, im Gespräch 2 Wochen, kein Kunde 3 Monate, offen 2 Monate). Die Übersicht **Besuche → Fällig** zeigt, wo ein Besuch fällig oder überfällig ist.
 - **Gelb hinterlegte Zeilen** (auch hellgelb oder goldgelb, ganze Zeile oder einzelne Zelle) werden als **„prüfen“** markiert.
   In der Praxis-Ansicht kannst du sie später mit **„Geprüft“** bestätigen.
 - Die Datei muss im Format **.xlsx** sein (in Excel: *Speichern unter → Excel-Arbeitsmappe*).
@@ -134,9 +151,11 @@ Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht le
    - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
-5. **Lücke füllen / Vorschläge in der Nähe**: Entsteht eine Wartezeit, schlägt die App passende Praxen in der Nähe vor (an dem Tag geöffnet, länger nicht besucht).
-6. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
-7. **Auf Karte zeigen**: nummerierte Stopps und Strecke. **Ganze Route (Google Maps)** öffnet alle Stopps auf einmal (bis 9 Zwischenstopps).
+5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, aktive Kunden und laufende Gespräche zuerst – und rechnet sie gleich durch.
+6. **Feste Praxen + passende Besuche**: 1–2 Praxen auswählen (z. B. ein Termin) und **Passende Besuche ergänzen** tippen. Die App sucht fällige Praxen **auf der Strecke** (wenig Umweg) und **in der Nähe** und plant so viele ein, wie in den Tag passen (höchstens die eingestellte Zahl Besuche). Auch bei einer Wartezeit hilft **Lücke füllen**.
+7. **Packliste**: Unter „Packliste & Notizen“ trägst du ein, was du an diesem Tag allgemein brauchst, und bei jeder Praxis unter „Mitbringen“ (🎒), was du dort mitbringen willst – z. B. „Muster A, Katalog“. Daraus entsteht automatisch eine Liste zum Abhaken; gleiche Dinge erscheinen nur einmal mit allen Praxen dazu.
+8. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
+9. **Auf Karte zeigen**: nummerierte Stopps und Strecke. **Ganze Route (Google Maps)** öffnet alle Stopps auf einmal (bis 9 Zwischenstopps).
 
 Die Fahrzeiten kommen vom kostenlosen OpenStreetMap-Routing (inkl. einstellbarem Verkehrszuschlag, Standard 15 %). Ohne Internet schätzt die App sie grob und weist darauf hin.
 
@@ -198,6 +217,8 @@ src/
   state/selectors.ts      Abgeleitete Daten (gefilterte Liste, Status-Übersicht, doppelte Standorte)
   state/duplicates.ts     Doppelte Standorte finden (Adresse, Name, Position) und zusammenführen
   utils/kind.ts           Praxis/Klinik: Bezeichnungen und automatische Erkennung
+  utils/customer.ts       Kundenstatus (aktiv/im Gespräch/kein), Besuchsintervall, Fälligkeit
+  tour/packing.ts         Packliste aus Tagesnotizen und „Mitbringen“ je Besuch
   import/xlsx-reader.ts   Excel-Leser inkl. Farberkennung (gelb = „prüfen“)
   import/practice-import.ts  Spalten erkennen, Zeilen lesen, mit vorhandenen Praxen zusammenführen
   geo/geocoder.ts         Adresssuche (Nominatim) mit Warteschlange, 1 Anfrage/s, Zwischenspeicher

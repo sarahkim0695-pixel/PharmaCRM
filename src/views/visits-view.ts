@@ -6,15 +6,15 @@ import { store } from '../state/store';
 import type { Practice } from '../types';
 import { h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
-import { colorForStatus, statusKey } from '../utils/colors';
-import { daysBetween, daysSince, formatDate, formatDateShort, parseDate, relativeDays, todayStr } from '../utils/dates';
+import { dueInfo, formatInterval, practiceColor, STATE_LABEL, stateColor, stateKeyOf, type StateKey } from '../utils/customer';
+import { daysBetween, formatDate, formatDateShort, parseDate, relativeDays, todayStr } from '../utils/dates';
 import { collator, plural } from '../utils/text';
 import { emptyState, pageHeader, type View } from './common';
 import { visitItem } from './visits-section';
 
 type Tab = 'termine' | 'lange' | 'verlauf';
 let tab: Tab = 'termine';
-const staleStatuses = new Set<string>();
+const staleStatuses = new Set<StateKey>();
 let includeNever = true;
 
 export function visitsView(): View {
@@ -23,7 +23,7 @@ export function visitsView(): View {
   function render() {
     const tabs: [Tab, string][] = [
       ['termine', 'Termine'],
-      ['lange', 'Lange nicht besucht'],
+      ['lange', 'Fällig'],
       ['verlauf', 'Verlauf'],
     ];
     setChildren(
@@ -53,6 +53,8 @@ function summary(): HTMLElement {
   weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Montag
   const thisWeek = visits.filter((v) => v.date >= todayStr(weekStart) && v.date <= todayStr(today)).length;
   const thisMonth = visits.filter((v) => v.date.slice(0, 7) === todayStr(today).slice(0, 7)).length;
+  const ctx = filterContext();
+  const dueCount = store.practiceList().filter((p) => store.lastVisit(p.id) && isStale(p, ctx)).length;
   const next7 = store.practiceList().filter((p) => {
     if (!p.nextAppointment) return false;
     const d = daysBetween(today, parseDate(p.nextAppointment));
@@ -64,6 +66,7 @@ function summary(): HTMLElement {
     h('div', { class: 'stat' }, h('b', null, String(thisWeek)), h('span', null, 'Besuche diese Woche')),
     h('div', { class: 'stat' }, h('b', null, String(thisMonth)), h('span', null, 'Besuche diesen Monat')),
     h('div', { class: 'stat' }, h('b', null, String(next7)), h('span', null, 'Termine in 7 Tagen')),
+    h('div', { class: 'stat stat-warn' }, h('b', null, String(dueCount)), h('span', null, 'Besuche fällig')),
   );
 }
 
@@ -74,7 +77,7 @@ function practiceRow(p: Practice, side: HTMLElement | string, extra?: HTMLElemen
     h(
       'a',
       { class: 'prow', href: `#/praxis/${p.id}` },
-      h('span', { class: 'dot', style: { background: colorForStatus(p.status, store.settings.statusColors) } }),
+      h('span', { class: 'dot', style: { background: practiceColor(p, store.settings) } }),
       h(
         'span',
         { class: 'prow-main' },
@@ -117,22 +120,24 @@ function appointments(): HTMLElement {
 
 function stale(rerender: () => void): HTMLElement {
   const ctx = filterContext();
-  const days = store.settings.staleDays;
   const list = store
     .practiceList()
     .filter((p) => isStale(p, ctx))
     .filter((p) => includeNever || store.lastVisit(p.id))
-    .filter((p) => !staleStatuses.size || staleStatuses.has(statusKey(p.status)))
-    .map((p) => ({ p, last: store.lastVisit(p.id)?.date }))
-    // nie besucht zuerst, dann der älteste Besuch
-    .sort((a, b) => (a.last ?? '').localeCompare(b.last ?? '') || collator.compare(a.p.name, b.p.name));
+    .filter((p) => !staleStatuses.size || staleStatuses.has(stateKeyOf(p)))
+    .map((p) => {
+      const last = store.lastVisit(p.id)?.date;
+      return { p, last, due: dueInfo(p, last, store.settings) };
+    })
+    // am stärksten überfällig zuerst (gemessen am eigenen Intervall), nie besuchte danach
+    .sort((a, b) => Number(a.due.never) - Number(b.due.never) || b.due.ratio - a.due.ratio || collator.compare(a.p.name, b.p.name));
 
   const chips = statusOptions().map((o) =>
     h(
       'button',
       {
         class: ['chip-toggle', staleStatuses.has(o.key) && 'on'],
-        style: { '--chip': colorForStatus(o.key, store.settings.statusColors) },
+        style: { '--chip': stateColor(o.key, store.settings) },
         onclick: () => {
           if (staleStatuses.has(o.key)) staleStatuses.delete(o.key);
           else staleStatuses.add(o.key);
@@ -147,7 +152,7 @@ function stale(rerender: () => void): HTMLElement {
   return h(
     'div',
     null,
-    h('p', { class: 'muted small' }, `Praxen ohne Besuch seit mindestens ${days} Tagen (änderbar unter Mehr → Einstellungen).`),
+    h('p', { class: 'muted small' }, 'Besuch fällig laut Besuchsintervall der Praxis (sonst Standard je Kundenstatus, änderbar unter Mehr → Einstellungen).'),
     h('div', { class: 'chip-select' }, chips),
     h(
       'label',
@@ -177,11 +182,17 @@ function stale(rerender: () => void): HTMLElement {
       ? h(
           'ul',
           { class: 'plist' },
-          list.map(({ p, last }) =>
-            practiceRow(p, last ? h('span', { class: 'stale-days' }, h('b', null, `${daysSince(last)} Tage`), h('span', null, formatDate(last))) : h('span', { class: 'muted' }, 'nie besucht')),
+          list.map(({ p, last, due }) =>
+            practiceRow(
+              p,
+              last
+                ? h('span', { class: 'stale-days' }, h('b', null, due.dueInDays === 0 ? 'heute fällig' : `+${-due.dueInDays} Tage`), h('span', null, `alle ${formatInterval(due.interval)}`))
+                : h('span', { class: 'muted' }, 'nie besucht'),
+              last ? `Letzter Besuch ${formatDate(last)} · ${STATE_LABEL[stateKeyOf(p)]}` : STATE_LABEL[stateKeyOf(p)],
+            ),
           ),
         )
-      : emptyState({ icon: 'check', title: 'Alles besucht', text: 'Keine Praxis ist länger als eingestellt ohne Besuch.' }),
+      : emptyState({ icon: 'check', title: 'Nichts fällig', text: 'Alle Praxen sind im Rahmen ihres Besuchsintervalls besucht.' }),
   );
 }
 

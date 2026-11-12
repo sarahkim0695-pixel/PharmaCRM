@@ -8,7 +8,7 @@ import { openSheet } from '../ui/dialog';
 import { debounce, h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { dueInfo, practiceColor, STATE_LABEL, stateColor, stateKeyOf } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { entityWord, KIND_LABEL, KIND_PLURAL, kindOf } from '../utils/kind';
 import type { FacilityKind } from '../types';
@@ -118,7 +118,7 @@ export function listView(route: Route): View {
       f.plz.map((c) => chip(`PLZ ${c}`, () => filterState.update({ plz: f.plz.filter((x) => x !== c) }))),
       f.onlyReview && chip('prüfen', () => filterState.update({ onlyReview: false })),
       f.locationProblem && chip('Standort fehlt/ungenau', () => filterState.update({ locationProblem: false })),
-      f.stale && chip(`> ${store.settings.staleDays} Tage nicht besucht`, () => filterState.update({ stale: false })),
+      f.stale && chip('Besuch fällig', () => filterState.update({ stale: false })),
       f.hasAppointment && chip('mit Termin', () => filterState.update({ hasAppointment: false })),
       f.territory !== 'all' && chip(f.territory === 'inside' ? 'im Gebiet' : 'außerhalb Gebiet', () => filterState.update({ territory: 'all' })),
       f.productId && f.productState && chip(
@@ -149,7 +149,9 @@ export function listView(route: Route): View {
 
 function row(p: Practice): HTMLElement {
   const last = store.lastVisit(p.id);
-  const color = colorForStatus(p.status, store.settings.statusColors);
+  const color = practiceColor(p, store.settings);
+  const due = dueInfo(p, last?.date, store.settings);
+  const isDue = !due.never && due.dueInDays <= 0;
   const noPin = p.geoStatus === 'not_found';
   return h(
     'li',
@@ -157,18 +159,18 @@ function row(p: Practice): HTMLElement {
     h(
       'a',
       { class: 'prow', href: `#/praxis/${p.id}` },
-      h('span', { class: ['dot', kindOf(p) === 'klinik' && 'dot-klinik'], style: { background: color }, title: p.status }),
+      h('span', { class: ['dot', kindOf(p) === 'klinik' && 'dot-klinik'], style: { background: color }, title: STATE_LABEL[stateKeyOf(p)] }),
       h(
         'span',
         { class: 'prow-main' },
         h('span', { class: 'prow-title' }, p.name),
         h('span', { class: 'prow-sub' }, [p.specialty, `${p.plz} ${p.city}`.trim()].filter(Boolean).join(' · ')),
-        (p.needsReview || noPin || p.geoStatus === 'approx' || p.nextAppointment || p.status || kindOf(p) === 'klinik') &&
-          h(
+        h(
             'span',
             { class: 'badges' },
             kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
-            p.status && h('span', { class: 'badge badge-soft', style: { '--badge': color } }, p.status),
+            h('span', { class: 'badge badge-soft', style: { '--badge': color } }, STATE_LABEL[stateKeyOf(p)]),
+            isDue && h('span', { class: 'badge badge-due' }, 'Besuch fällig'),
             p.needsReview && h('span', { class: 'badge badge-review' }, 'prüfen'),
             noPin && h('span', { class: 'badge badge-warn' }, 'kein Pin'),
             p.geoStatus === 'approx' && h('span', { class: 'badge badge-warn' }, 'Pin ungenau'),
@@ -216,7 +218,7 @@ export function openFilterSheet(): void {
           'button',
           {
             class: ['chip-toggle', active.has(o.key) && 'on'],
-            style: { '--chip': colorForStatus(o.key, store.settings.statusColors) },
+            style: { '--chip': stateColor(o.key, store.settings) },
             onclick: () => {
               if (active.has(o.key)) active.delete(o.key);
               else active.add(o.key);
@@ -283,7 +285,7 @@ export function openFilterSheet(): void {
       h('h3', { class: 'sheet-section' }, 'Besonderes'),
       toggle('Nur „prüfen“ (gelb markiert)', f.onlyReview, (v) => filterState.update({ onlyReview: v })),
       toggle('Standort fehlt oder ungenau', f.locationProblem, (v) => filterState.update({ locationProblem: v })),
-      toggle(`Lange nicht besucht (> ${store.settings.staleDays} Tage)`, f.stale, (v) => filterState.update({ stale: v })),
+      toggle('Besuch fällig (laut Besuchsintervall)', f.stale, (v) => filterState.update({ stale: v })),
       toggle('Mit geplantem Termin', f.hasAppointment, (v) => filterState.update({ hasAppointment: v })),
       field(
         'Gebiet',

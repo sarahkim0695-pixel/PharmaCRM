@@ -15,7 +15,8 @@ import { confirmDialog, openSheet } from '../ui/dialog';
 import { h, setChildren, type Child } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { dueInfo, dueText, practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
+import { packingList } from '../tour/packing';
 import { formatDateShort, parseDate, todayStr } from '../utils/dates';
 import { appleMapsUrl } from '../utils/maps';
 import { collator, normalize, plural } from '../utils/text';
@@ -97,6 +98,7 @@ export function tourView(route: Route): View {
   let busy = false;
   let error = '';
   let frameOpen = !store.settings.home;
+  let packOpen = false;
   const el = h('div', { class: 'page page-tour' });
 
   async function persist() {
@@ -105,6 +107,12 @@ export function tourView(route: Route): View {
   function change(mutator: (t: Tour) => void) {
     mutator(tour);
     delete tour.plan;
+    void persist();
+    render();
+  }
+  /** Ändern, ohne dass neu berechnet werden muss (Notizen, Packliste) */
+  function quietChange(mutator: (t: Tour) => void) {
+    mutator(tour);
     void persist();
     render();
   }
@@ -124,7 +132,7 @@ export function tourView(route: Route): View {
       // Automatisch vorgeschlagene Praxen, die nicht passen, wieder herausnehmen
       const notFitting = new Set(plan.dropped.map((d) => d.practiceId));
       const removed = tour.stops.filter((s) => s.suggested && notFitting.has(s.practiceId)).map((s) => s.practiceId);
-      tour.stops = tour.stops.filter((s) => !removed.includes(s.practiceId)).map(({ practiceId, must }) => ({ practiceId, must }));
+      tour.stops = tour.stops.filter((s) => !removed.includes(s.practiceId)).map(({ suggested: _s, ...rest }) => rest);
       plan.dropped = plan.dropped.filter((d) => !removed.includes(d.practiceId));
       tour.plan = plan;
       await persist();
@@ -136,13 +144,13 @@ export function tourView(route: Route): View {
     render();
   }
 
-  async function addSuggestions() {
-    const sugg = suggestPractices(tour);
+  async function addSuggestions(limit = 12) {
+    const sugg = suggestPractices(tour, { limit });
     if (!sugg.length) {
-      toast('Keine passenden Praxen in der Nähe gefunden.');
+      toast(tour.region?.cities.length ? 'Keine passenden Praxen in dieser Region – Umkreis vergrößern?' : 'Keine passenden Praxen auf der Strecke oder in der Nähe gefunden.');
       return;
     }
-    tour.stops.push(...sugg.map((p) => ({ practiceId: p.id, must: false, suggested: true })));
+    tour.stops.push(...sugg.map((x) => ({ practiceId: x.practice.id, must: false, suggested: true })));
     delete tour.plan;
     await persist();
     await calculate();
@@ -160,6 +168,7 @@ export function tourView(route: Route): View {
       }),
       dayCard(upcoming),
       frameCard(),
+      regionCard(),
       stopsCard(),
       h(
         'div',
@@ -172,6 +181,7 @@ export function tourView(route: Route): View {
         error ? h('div', { class: 'notice notice-warn' }, iconEl('warning', 20), error) : null,
         !plan && tour.stops.length && !busy ? h('p', { class: 'muted small center' }, 'Berechnet die beste Reihenfolge mit Uhrzeiten – passend zu Öffnungszeiten, Terminen und deiner Mittagspause.') : null,
       ),
+      packCard(),
       plan ? planCard() : null,
       store.tours.has(date)
         ? h('div', { class: 'danger-zone' }, h('button', { class: 'btn btn-danger-outline', onclick: () => void removeTour() }, iconEl('trash', 18), 'Tour löschen'))
@@ -214,10 +224,12 @@ export function tourView(route: Route): View {
     const switchRow = (label: string, checked: boolean, onChange: (v: boolean) => void) =>
       h('label', { class: 'switch-row' }, h('span', null, label), h('input', { type: 'checkbox', class: 'switch', checked, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }));
     const L = tour.lunch;
+    const maxVisits = tour.maxVisits ?? store.settings.tourDefaults.maxVisits;
     const summary = [
       tour.startMode === 'home' ? 'Start zuhause' : 'Start am Standort',
       `${formatTime(tour.dayStart)}–${formatTime(tour.dayEnd)}`,
       L.enabled ? `Pause ${L.minutes} min (${formatTime(L.from)}–${formatTime(L.to)})` : 'ohne Pause',
+      `max. ${maxVisits} Besuche`,
     ].join(' · ');
 
     const details = h(
@@ -236,6 +248,10 @@ export function tourView(route: Route): View {
       h('div', { class: 'grid-2 grid-2-even' },
         field('Abfahrt frühestens', timeInput(tour.dayStart, (v) => change((t) => (t.dayStart = v)))),
         field('Feierabend spätestens', timeInput(tour.dayEnd, (v) => change((t) => (t.dayEnd = v)))),
+      ),
+      field(
+        'Höchstens so viele Besuche',
+        h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 40, value: String(maxVisits), onchange: (e: Event) => change((t) => (t.maxVisits = Math.min(40, Math.max(1, Number((e.target as HTMLInputElement).value) || maxVisits)))) }),
       ),
       switchRow('Am Ende zurück nach Hause', tour.returnHome, (v) => change((t) => (t.returnHome = v))),
       switchRow('Mittagspause einplanen', L.enabled, (v) => change((t) => (t.lunch.enabled = v))),
@@ -267,43 +283,143 @@ export function tourView(route: Route): View {
               const ht = hoursText(p, date);
               const dur = practiceDurations(p);
               const num = order.get(p.id);
+              const due = dueInfo(p, store.lastVisit(p.id)?.date, store.settings, parseDate(date));
+              const bring = h('input', {
+                class: 'bring-input',
+                value: s.bring ?? '',
+                placeholder: 'Mitbringen … (z. B. Muster, Katalog)',
+                'aria-label': `Mitbringen für ${p.name}`,
+                onchange: (e: Event) =>
+                  quietChange((t) => {
+                    const x = t.stops.find((y) => y.practiceId === p.id);
+                    if (x) x.bring = (e.target as HTMLInputElement).value.trim() || undefined;
+                  }),
+              });
               return h(
                 'li',
-                { class: ['stop', visitedOn(p.id, date) && 'done'] },
-                h('span', { class: ['stop-num', !num && 'none'] }, num ? String(num) : '–'),
+                { class: ['stop-wrap', visitedOn(p.id, date) && 'done'] },
                 h(
-                  'a',
-                  { class: 'stop-main', href: `#/praxis/${p.id}` },
-                  h('span', { class: 'prow-title' }, p.name),
-                  h('span', { class: 'prow-sub' }, `${p.city} · ${dur.park}+${dur.visit} min`),
-                  h('span', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
+                  'div',
+                  { class: 'stop' },
+                  h('span', { class: ['stop-num', !num && 'none'], style: num ? { background: practiceColor(p, store.settings) } : undefined }, num ? String(num) : '–'),
+                  h(
+                    'a',
+                    { class: 'stop-main', href: `#/praxis/${p.id}` },
+                    h('span', { class: 'prow-title' }, p.name, s.suggested ? h('span', { class: 'badge badge-info' }, 'Vorschlag') : null),
+                    h('span', { class: 'prow-sub' }, `${p.city} · ${dur.park}+${dur.visit} min`),
+                    h('span', { class: 'stop-why' }, `${STATE_LABEL[stateKeyOf(p)]} · ${dueText(due)}`),
+                    h('span', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
+                  ),
+                  h(
+                    'button',
+                    {
+                      class: ['icon-btn', 'must-btn', s.must && 'on'],
+                      'aria-label': s.must ? 'Fester Stopp' : 'Optionaler Stopp',
+                      title: s.must ? 'Muss besucht werden' : 'Optional – darf entfallen, wenn es zeitlich nicht passt',
+                      onclick: () => change((t) => {
+                        const x = t.stops.find((y) => y.practiceId === p.id);
+                        if (x) x.must = !x.must;
+                      }),
+                    },
+                    iconEl('pin', 20),
+                    h('span', null, s.must ? 'fest' : 'optional'),
+                  ),
+                  h('button', { class: 'icon-btn', 'aria-label': 'Aus der Tour entfernen', onclick: () => change((t) => (t.stops = t.stops.filter((y) => y.practiceId !== p.id))) }, iconEl('close', 20)),
                 ),
-                h(
-                  'button',
-                  {
-                    class: ['icon-btn', 'must-btn', s.must && 'on'],
-                    'aria-label': s.must ? 'Fester Stopp' : 'Optionaler Stopp',
-                    title: s.must ? 'Muss besucht werden' : 'Optional – darf entfallen, wenn es zeitlich nicht passt',
-                    onclick: () => change((t) => {
-                      const x = t.stops.find((y) => y.practiceId === p.id);
-                      if (x) x.must = !x.must;
-                    }),
-                  },
-                  iconEl('pin', 20),
-                  h('span', null, s.must ? 'fest' : 'optional'),
-                ),
-                h('button', { class: 'icon-btn', 'aria-label': 'Aus der Tour entfernen', onclick: () => change((t) => (t.stops = t.stops.filter((y) => y.practiceId !== p.id))) }, iconEl('close', 20)),
+                h('div', { class: 'stop-bring' }, iconEl('box', 18), bring),
               );
             }),
           )
-        : emptyState({ icon: 'route', title: 'Noch keine Praxen', text: 'Wähle Praxen aus – oder lass dir Praxen in der Nähe vorschlagen.' }),
+        : emptyState({ icon: 'route', title: 'Noch keine Praxen', text: 'Wähle oben einen Ort und tippe „Tour vorschlagen“ – oder wähle 1–2 Praxen fest aus und lass passende Besuche ergänzen.' }),
       h(
         'div',
         { class: 'row' },
         h('button', { class: 'btn', onclick: () => openPicker(tour, (ids) => change((t) => t.stops.push(...ids.map((practiceId) => ({ practiceId, must: false }))))) }, iconEl('plus', 20), 'Praxen auswählen'),
-        h('button', { class: 'btn', disabled: busy, onclick: () => void addSuggestions() }, iconEl('search', 20), 'Vorschläge in der Nähe'),
+        h('button', { class: 'btn', disabled: busy || (!tour.stops.length && !tour.region?.cities.length && !store.settings.home), onclick: () => void addSuggestions() }, iconEl('search', 20), 'Passende Besuche ergänzen'),
+      ),
+      h(
+        'p',
+        { class: 'muted small' },
+        '„Passende Besuche ergänzen“ sucht fällige Praxen auf der Strecke zu deinen gewählten Praxen oder in ihrer Nähe – aktive Kunden und laufende Gespräche zuerst. Was zeitlich nicht passt, fliegt beim Berechnen wieder raus.',
       ),
     );
+  }
+
+  function regionCard() {
+    const r = tour.region ?? { cities: [], radiusKm: 10 };
+    const setRegion = (cities: string[], radiusKm = r.radiusKm) => change((t) => (t.region = cities.length ? { cities, radiusKm } : undefined));
+    return section(
+      'Wohin? (optional)',
+      h('p', { class: 'muted small' }, 'Ort oder Region wählen – die App stellt eine passende Tour zusammen (fällige Besuche, aktive Kunden und laufende Gespräche zuerst).'),
+      h(
+        'div',
+        { class: 'chips region-chips' },
+        r.cities.map((c) => h('button', { class: 'chip', onclick: () => setRegion(r.cities.filter((x) => x !== c)) }, c, iconEl('close', 14))),
+        h('button', { class: 'btn btn-sm', onclick: () => openCityPicker(r.cities, (cities) => setRegion(cities)) }, iconEl('area', 18), r.cities.length ? 'Orte ändern' : 'Ort / Region wählen'),
+      ),
+      r.cities.length
+        ? h(
+            'div',
+            { class: 'row region-actions' },
+            h(
+              'select',
+              { class: 'radius-select', 'aria-label': 'Umkreis', onchange: (e: Event) => setRegion(r.cities, Number((e.target as HTMLSelectElement).value)) },
+              [0, 5, 10, 20, 30].map((km) => h('option', { value: String(km), selected: r.radiusKm === km }, km ? `+ ${km} km Umkreis` : 'nur in diesen Orten')),
+            ),
+            h('button', { class: 'btn btn-primary', disabled: busy, onclick: () => void addSuggestions(15) }, iconEl('route', 18), 'Tour vorschlagen'),
+          )
+        : null,
+    );
+  }
+
+  function packCard() {
+    const items = packingList(tour, (id) => store.getPractice(id)?.name);
+    const packed = new Set(tour.packed ?? []);
+    const done = items.filter((i) => packed.has(i.key)).length;
+    const note = h('textarea', {
+      rows: 3,
+      placeholder: 'Notizen für diesen Tag – z. B. was ich einpacken muss:\nMusterkoffer, Kataloge, Visitenkarten',
+      onchange: () => quietChange((t) => (t.dayNote = note.value.trim() || undefined)),
+    }, tour.dayNote ?? '');
+    const toggle = (key: string, on: boolean) =>
+      quietChange((t) => {
+        const set = new Set(t.packed ?? []);
+        if (on) set.add(key);
+        else set.delete(key);
+        t.packed = [...set];
+      });
+    const details = h(
+      'details',
+      { class: 'card details-card pack-card', open: packOpen || !!items.length },
+      h(
+        'summary',
+        null,
+        h('span', { class: 'card-title' }, '🎒 Packliste & Notizen'),
+        h('span', { class: 'muted small' }, items.length ? `${done} von ${items.length} eingepackt` : 'Notizen für diesen Tag, Mitbringen je Besuch'),
+      ),
+      field('Notizen für diesen Tag', note),
+      items.length
+        ? h(
+            'ul',
+            { class: 'pack-list' },
+            items.map((it) =>
+              h(
+                'li',
+                null,
+                h(
+                  'label',
+                  { class: ['pack-item', packed.has(it.key) && 'done'] },
+                  h('input', { type: 'checkbox', checked: packed.has(it.key), onchange: (e: Event) => toggle(it.key, (e.target as HTMLInputElement).checked) }),
+                  h('span', { class: 'pack-text' }, it.text, it.sources.length ? h('small', null, `für ${it.sources.join(', ')}`) : h('small', null, 'allgemein')),
+                ),
+              ),
+            ),
+          )
+        : h('p', { class: 'muted small' }, 'Trag hier oder bei den Praxen unter „Mitbringen“ ein, was du brauchst – daraus entsteht automatisch deine Packliste zum Abhaken.'),
+      done ? h('button', { class: 'btn btn-sm', onclick: () => quietChange((t) => (t.packed = [])) }, 'Alle Haken entfernen') : null,
+    );
+    details.addEventListener('toggle', () => (packOpen = details.open));
+    return details;
   }
 
   function planCard() {
@@ -384,10 +500,14 @@ export function tourView(route: Route): View {
           h(
             'div',
             { class: 'tl-body' },
-            h('div', { class: 'tl-title' }, h('span', { class: 'stop-num', style: { background: colorForStatus(p.status, store.settings.statusColors) } }, String(num)), h('a', { href: `#/praxis/${p.id}` }, p.name)),
+            h('div', { class: 'tl-title' }, h('span', { class: 'stop-num', style: { background: practiceColor(p, store.settings) } }, String(num)), h('a', { href: `#/praxis/${p.id}` }, p.name)),
             h('div', { class: 'prow-sub' }, [p.specialty, p.city].filter(Boolean).join(' · ')),
             h('div', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
             h('div', { class: 'tl-meta' }, `Ankunft ${formatTime(e.arrive)} · ${e.park} min Parken & Weg`),
+            (() => {
+              const bring = tour.stops.find((x) => x.practiceId === p.id)?.bring;
+              return bring ? h('div', { class: 'tl-bring' }, `🎒 Mitbringen: ${bring}`) : null;
+            })(),
             e.wait > 0
               ? h('div', { class: ['tl-wait', e.wait >= 30 && 'big'] }, `⏳ ${e.wait} min warten`, e.wait >= 30 ? h('button', { class: 'btn btn-sm', disabled: busy, onclick: () => void addSuggestions() }, 'Lücke füllen') : null)
               : null,
@@ -473,7 +593,7 @@ function openPicker(tour: Tour, onApply: (ids: string[]) => void): void {
     setChildren(
       chips,
       toggleChip('an dem Tag geöffnet', onlyOpen, (v) => (onlyOpen = v)),
-      toggleChip(`> ${store.settings.staleDays} Tage nicht besucht`, onlyStale, (v) => (onlyStale = v)),
+      toggleChip('Besuch fällig', onlyStale, (v) => (onlyStale = v)),
       toggleChip('im Gebiet', onlyTerritory, (v) => (onlyTerritory = v)),
     );
     const words = normalize(search.value).split(' ').filter(Boolean);
@@ -530,5 +650,37 @@ function openPicker(tour: Tour, onApply: (ids: string[]) => void): void {
     content: [search, chips, count, list],
     footer: [h('button', { class: 'btn', onclick: () => sheet.close() }, 'Abbrechen'), applyBtn],
   });
+  render();
+}
+
+// ---------- Orte / Region auswählen ----------
+
+function openCityPicker(selected: string[], onApply: (cities: string[]) => void): void {
+  const chosen = new Set(selected);
+  const counts = new Map<string, number>();
+  for (const p of store.practices.values()) if (p.city) counts.set(p.city, (counts.get(p.city) ?? 0) + 1);
+  const cities = [...counts.keys()].sort(collator.compare);
+  const search = h('input', { type: 'search', placeholder: 'Ort suchen …', autocomplete: 'off', oninput: () => render() });
+  const list = h('ul', { class: 'pick-list' });
+  const apply = h('button', { class: 'btn btn-primary', onclick: () => { onApply([...chosen]); sheet.close(); } }, 'Übernehmen');
+  function render() {
+    const q = normalize(search.value);
+    setChildren(
+      list,
+      cities
+        .filter((c) => !q || normalize(c).includes(q))
+        .slice(0, 200)
+        .map((c) => {
+          const cb = h('input', { type: 'checkbox', checked: chosen.has(c) });
+          cb.addEventListener('change', () => {
+            if (cb.checked) chosen.add(c);
+            else chosen.delete(c);
+            apply.textContent = chosen.size ? `Übernehmen (${chosen.size})` : 'Übernehmen';
+          });
+          return h('li', null, h('label', { class: 'pick' }, cb, h('span', { class: 'prow-main' }, h('span', { class: 'prow-title' }, c), h('span', { class: 'prow-sub' }, plural(counts.get(c) ?? 0, 'Eintrag', 'Einträge')))));
+        }),
+    );
+  }
+  const sheet = openSheet({ title: 'Orte wählen', wide: true, content: [search, list], footer: [h('button', { class: 'btn', onclick: () => sheet.close() }, 'Abbrechen'), apply] });
   render();
 }

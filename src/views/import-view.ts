@@ -8,7 +8,7 @@ import { pickFile } from '../ui/dialog';
 import { h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { STATE_LABEL, stateColor, stateFromText } from '../utils/customer';
 import { plural } from '../utils/text';
 import { findDuplicates } from '../state/duplicates';
 import { duplicateGroups } from '../state/selectors';
@@ -26,7 +26,7 @@ export function importView(): View {
         'Praxis- und Klinikliste (.xlsx)',
         h('p', null, 'Wähle deine Excel-Datei, z. B. ', h('b', null, 'Praxisliste_Gebiet.xlsx'), '. Erwartete Spalten:'),
         h('p', { class: 'columns-hint' }, 'Praxis · Fachrichtung · Straße · PLZ · Ort · Status · Hinweis'),
-        h('p', { class: 'muted small' }, 'Optional für die Tourplanung: Öffnungszeiten (z. B. „Mo-Fr 8-12, Mo Di Do 14-18“ – oder je eine Spalte Mo, Di, Mi …), Parken (Min), Vor Ort (Min).'),
+        h('p', { class: 'muted small' }, 'Optional: Typ (Praxis/Klinik), Intervall (z. B. „4 Wochen“), Öffnungszeiten (z. B. „Mo-Fr 8-12, Mo Di Do 14-18“ – oder je eine Spalte Mo, Di, Mi …), Parken (Min), Vor Ort (Min).'),
         h('ul', { class: 'bullets' },
           h('li', null, 'Gelb markierte Zeilen werden als ', h('span', { class: 'badge badge-review' }, 'prüfen'), ' angezeigt.'),
           h('li', null, 'Erneuter Import aktualisiert vorhandene Praxen – Besuche, Produkte und Pins bleiben erhalten.'),
@@ -61,7 +61,7 @@ export function importView(): View {
       section(
         'Vorschau',
         h('p', { class: 'muted small' }, `${fileName} · ${preview.sheets.map((sh) => `Blatt „${sh.name}“ (${sh.rowCount} Zeilen, Überschriften in Zeile ${sh.headerRowNumber})`).join(' · ')}`),
-        h('ul', { class: 'col-check' }, (['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint', 'phone', 'hours', 'park', 'visit'] as Field[]).map(colRow)),
+        h('ul', { class: 'col-check' }, (['name', 'specialty', 'street', 'plz', 'city', 'status', 'hint', 'phone', 'hours', 'park', 'visit', 'interval'] as Field[]).map(colRow)),
         preview.missingColumns.length
           ? h('div', { class: 'notice notice-warn' }, iconEl('warning', 20), `Nicht gefunden: ${preview.missingColumns.map((f) => FIELD_LABELS[f]).join(', ')}. Diese Angaben bleiben leer.`)
           : null,
@@ -76,12 +76,12 @@ export function importView(): View {
           stat(merge.updated, 'aktualisiert'),
           merge.unchanged ? stat(merge.unchanged, 'unverändert') : null,
         ),
-        h('h3', { class: 'sheet-section' }, 'Status-Werte'),
+        h('h3', { class: 'sheet-section' }, 'Status aus der Excel → Kundenstatus'),
         h(
           'div',
           { class: 'badges' },
           [...preview.statusCounts].map(([s, n]) =>
-            h('span', { class: 'badge', style: { '--badge': colorForStatus(s, store.settings.statusColors) } }, `${s || 'ohne Status'}: ${n}`),
+            h('span', { class: 'badge', style: { '--badge': stateColor(stateFromText(s) ?? 'offen', store.settings) } }, `${s || 'ohne Status'} → ${STATE_LABEL[stateFromText(s) ?? 'offen']}: ${n}`),
           ),
         ),
         preview.reviewCount

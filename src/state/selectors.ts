@@ -1,6 +1,6 @@
 /** Abgeleitete Daten aus Store + Filter (für Liste und Karte). */
 import type { Practice } from '../types';
-import { statusKey } from '../utils/colors';
+import { intervalOf, STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { collator } from '../utils/text';
 import { findDuplicates, type DuplicateGroup } from './duplicates';
 import { filterState, matchesFilter, sortPractices, type FilterContext } from './filters';
@@ -9,7 +9,7 @@ import { store } from './store';
 export function filterContext(): FilterContext {
   return {
     lastVisit: (id) => store.lastVisit(id),
-    staleDays: store.settings.staleDays,
+    intervalOf: (p) => intervalOf(p, store.settings),
     territory: store.territorySet(),
   };
 }
@@ -28,16 +28,14 @@ export function listPractices(): Practice[] {
   });
 }
 
-/** Alle vorkommenden Status mit Anzahl und Anzeigename (erste Schreibweise). */
-export function statusOptions(): { key: string; label: string; count: number }[] {
-  const m = new Map<string, { key: string; label: string; count: number }>();
+/** Kundenstatus mit Anzahl (nur vorkommende) – für Legende und Filter. */
+export function statusOptions(): { key: StateKey; label: string; count: number }[] {
+  const counts = new Map<StateKey, number>();
   for (const p of store.practices.values()) {
-    const key = statusKey(p.status);
-    const entry = m.get(key) ?? { key, label: p.status.trim() || 'ohne Status', count: 0 };
-    entry.count++;
-    m.set(key, entry);
+    const k = stateKeyOf(p);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
   }
-  return [...m.values()].sort((a, b) => b.count - a.count || collator.compare(a.label, b.label));
+  return STATE_KEYS.filter((k) => counts.get(k)).map((key) => ({ key, label: STATE_LABEL[key], count: counts.get(key)! }));
 }
 
 /** Eindeutige, sortierte Werte eines Feldes (für Auswahllisten). */

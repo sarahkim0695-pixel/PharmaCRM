@@ -36,6 +36,8 @@ export interface OptInput {
   stops: OptStop[];
   /** Fahrminuten: Index 0 = Start, i + 1 = stops[i] */
   travel: number[][];
+  /** Höchstens so viele Besuche (feste Stopps zählen mit, werden aber nie weggelassen) */
+  maxVisits?: number;
 }
 
 export type OptItem =
@@ -157,7 +159,10 @@ function insertAll(input: OptInput, seq: number[], candidates: number[], noise: 
     if (!curSim) break;
     const base = curSim.end + 0.05 * curSim.drive;
     let best: { seq: number[]; score: number; el: number } | null = null;
+    const visits = current.filter((x) => x !== LUNCH).length;
     for (const el of open) {
+      // Höchstzahl an Besuchen erreicht → nur noch Pause und feste Stopps
+      if (el !== LUNCH && !input.stops[el].must && input.maxVisits !== undefined && visits >= input.maxVisits) continue;
       const prio = el === LUNCH ? LUNCH_PENALTY : input.stops[el].must ? MUST_PENALTY : STOP_PENALTY * input.stops[el].weight;
       for (let pos = 0; pos <= current.length; pos++) {
         const cand = [...current.slice(0, pos), el, ...current.slice(pos)];

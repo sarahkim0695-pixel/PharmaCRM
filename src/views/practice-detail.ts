@@ -41,8 +41,8 @@ export function practiceView(route: Route): View {
         actions: h('button', { class: 'btn btn-sm', onclick: () => navigate(`/praxis/${p.id}/bearbeiten`) }, iconEl('edit', 18), 'Bearbeiten'),
       }),
       headCard(p),
-      locationCard(p),
       extraSections.map((fn) => fn(p)),
+      locationCard(p),
       h(
         'div',
         { class: 'danger-zone' },

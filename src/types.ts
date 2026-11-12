@@ -11,6 +11,9 @@ export type GeoStatus =
   | 'not_found' // nicht gefunden – Pin bitte von Hand setzen
   | 'manual'; // Pin wurde von Hand gesetzt
 
+/** Kundenstatus: aktiver Kunde (bestellt), im Gespräch (auf dem Weg zum Kunden), kein Kunde */
+export type CustomerState = 'aktiv' | 'prozess' | 'kein';
+
 /** Art der Einrichtung */
 export type FacilityKind = 'praxis' | 'klinik';
 
@@ -29,7 +32,11 @@ export interface Practice {
   street: string; // „Straße“
   plz: string; // „PLZ“ (immer 5-stellig als Text)
   city: string; // „Ort“
-  status: string; // „Status“ – frei, z. B. „Kunde“, „kein Kunde“, „Interessent“
+  status: string; // „Status“ wie in der Excel – frei, z. B. „Kunde“, „kein Kunde“, „Interessent“
+  /** Kundenstatus, in der App gesetzt (fehlt = aus dem Status-Text abgeleitet) */
+  customerState?: CustomerState;
+  /** Eigenes Besuchsintervall in Tagen (fehlt = Standard je Kundenstatus) */
+  visitIntervalDays?: number;
   hint: string; // „Hinweis“
   phone: string; // optional „Telefon“
   /** Gelb markierte Zeile in der Excel bzw. von Hand gesetzt → „prüfen“ */
@@ -110,6 +117,8 @@ export interface Settings {
   tourDefaults: TourDefaults;
   /** Datum der Tour, die gerade geplant wird (für „Zur Tour hinzufügen“) */
   activeTourDate?: string;
+  /** Standard-Besuchsintervall in Tagen je Kundenstatus */
+  intervalDefaults: Record<CustomerState | 'offen', number>;
   /** Paare von Einträgen, die als „verschieden, kein Duplikat“ markiert wurden („idA|idB“) */
   dismissedDuplicates?: string[];
   /** Wurde der Willkommens-Hinweis schon gezeigt? */
@@ -127,6 +136,7 @@ export interface TourDefaults {
   parkMinutes: number; // Standard: Parken & Fußweg
   visitMinutes: number; // Standard: Aufenthalt vor Ort
   trafficPercent: number; // Zuschlag auf die berechneten Fahrzeiten
+  maxVisits: number; // höchstens so viele Besuche pro Tag
 }
 
 // ---------- Tourplanung ----------
@@ -137,6 +147,8 @@ export interface TourStop {
   must: boolean;
   /** Automatisch vorgeschlagen – fliegt wieder raus, wenn sie nicht passt */
   suggested?: boolean;
+  /** Was ich zu diesem Besuch mitbringen möchte (nur für diesen Tag) */
+  bring?: string;
 }
 
 export interface Tour {
@@ -147,7 +159,15 @@ export interface Tour {
   dayEnd: number;
   returnHome: boolean;
   lunch: { enabled: boolean; from: number; to: number; minutes: number };
+  /** Höchstens so viele Besuche (fehlt = Standard) */
+  maxVisits?: number;
+  /** Region für Vorschläge: Orte + Umkreis */
+  region?: { cities: string[]; radiusKm: number };
   stops: TourStop[];
+  /** Notizen für diesen Tag (z. B. was ich einpacken muss) */
+  dayNote?: string;
+  /** Abgehakte Einträge der Packliste */
+  packed?: string[];
   plan?: TourPlan;
   createdAt: string;
   updatedAt: string;

@@ -3,20 +3,20 @@
  */
 import type { FacilityKind, Practice, ProductState, Visit } from '../types';
 import { kindOf } from '../utils/kind';
-import { statusKey } from '../utils/colors';
+import { STATE_KEYS, stateKeyOf, type StateKey } from '../utils/customer';
 import { daysSince } from '../utils/dates';
 import { collator, normalize } from '../utils/text';
 
 export interface PracticeFilter {
   search: string;
   kinds: FacilityKind[]; // Praxis / Klinik
-  statuses: string[]; // Status-Schlüssel (siehe statusKey)
+  statuses: StateKey[]; // Kundenstatus: aktiv, prozess, kein, offen
   cities: string[];
   specialties: string[];
   plz: string[];
   onlyReview: boolean; // nur „prüfen“
   locationProblem: boolean; // nicht gefunden / ungenau / noch offen
-  stale: boolean; // lange nicht besucht
+  stale: boolean; // Besuch fällig (laut Besuchsintervall)
   hasAppointment: boolean; // Termin geplant
   territory: 'all' | 'inside' | 'outside';
   productId: string;
@@ -62,7 +62,8 @@ export const EMPTY_FILTER: PracticeFilter = {
 
 export interface FilterContext {
   lastVisit: (practiceId: string) => Visit | undefined;
-  staleDays: number;
+  /** Besuchsintervall einer Praxis in Tagen */
+  intervalOf: (p: Practice) => number;
   territory: Set<string>;
   today?: Date;
 }
@@ -86,7 +87,7 @@ export function activeFilterCount(f: PracticeFilter): number {
 
 export function isStale(p: Practice, ctx: FilterContext): boolean {
   const last = ctx.lastVisit(p.id);
-  return !last || daysSince(last.date, ctx.today) >= ctx.staleDays;
+  return !last || daysSince(last.date, ctx.today) >= ctx.intervalOf(p);
 }
 
 export function matchesFilter(p: Practice, f: PracticeFilter, ctx: FilterContext): boolean {
@@ -98,7 +99,7 @@ export function matchesFilter(p: Practice, f: PracticeFilter, ctx: FilterContext
     if (!words.every((w) => hay.includes(w))) return false;
   }
   if (f.kinds?.length && !f.kinds.includes(kindOf(p))) return false;
-  if (f.statuses.length && !f.statuses.includes(statusKey(p.status))) return false;
+  if (f.statuses.length && !f.statuses.includes(stateKeyOf(p))) return false;
   if (f.cities.length && !f.cities.includes(p.city)) return false;
   if (f.specialties.length && !f.specialties.includes(p.specialty)) return false;
   if (f.plz.length && !f.plz.includes(p.plz)) return false;
@@ -179,6 +180,8 @@ class FilterState {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
       if (saved) {
         this.filter = { ...EMPTY_FILTER, ...saved.filter, search: '' };
+        // alte gespeicherte Status-Filter (freier Text) verwerfen
+        this.filter.statuses = (this.filter.statuses ?? []).filter((s) => STATE_KEYS.includes(s));
         this.sort = saved.sort === 'distance' ? 'name' : (saved.sort ?? 'name');
       }
     } catch {

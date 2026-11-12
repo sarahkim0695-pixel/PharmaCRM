@@ -19,6 +19,7 @@
 import { parseDayCell, parseOpeningHours } from '../tour/opening-hours';
 import type { FacilityKind, Practice, WeekHours } from '../types';
 import { detectKind, kindOf, type KindSource } from '../utils/kind';
+import { parseInterval } from '../utils/customer';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
 import { isYellow, type CellValue, type SheetData } from './xlsx-reader';
@@ -35,7 +36,8 @@ export type Field =
   | 'hours'
   | 'park'
   | 'visit'
-  | 'kind';
+  | 'kind'
+  | 'interval';
 
 /** Mögliche Spaltenüberschriften je Feld – verglichen ohne Leer- und Sonderzeichen. */
 const HEADER_ALIASES: Record<Field, string[]> = {
@@ -50,6 +52,7 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   hours: ['offnungszeiten', 'offnungszeit', 'oeffnungszeiten', 'sprechzeiten', 'sprechzeit', 'praxiszeiten', 'sprechstunden'],
   park: ['parken', 'parkenweg', 'parkenundweg', 'parkzeit', 'parkenfussweg', 'weg', 'fussweg'],
   visit: ['vorort', 'aufenthalt', 'dauer', 'besuchsdauer', 'zeitaufwand', 'zeitvorort'],
+  interval: ['intervall', 'besuchsintervall', 'rhythmus', 'besuchsrhythmus', 'turnus', 'besuchsturnus', 'besuchen'],
   kind: ['typ', 'art', 'einrichtungsart', 'einrichtungstyp', 'kategorie', 'praxisklinik', 'praxisoderklinik', 'typpraxisklinik'],
 };
 
@@ -84,6 +87,7 @@ export const FIELD_LABELS: Record<Field, string> = {
   park: 'Parken (Min)',
   visit: 'Vor Ort (Min)',
   kind: 'Typ (Praxis/Klinik)',
+  interval: 'Intervall',
 };
 
 export interface ImportRow {
@@ -108,6 +112,7 @@ export interface ImportRow {
   hoursUnreadable?: boolean;
   parkMinutes?: number;
   visitMinutes?: number;
+  visitIntervalDays?: number;
 }
 
 export interface SheetInfo {
@@ -294,6 +299,7 @@ function readRows(
       needsReview: yellow,
       parkMinutes: columns.park !== undefined ? parseMinutes(cells[columns.park]?.value) : undefined,
       visitMinutes: columns.visit !== undefined ? parseMinutes(cells[columns.visit]?.value) : undefined,
+      visitIntervalDays: columns.interval !== undefined ? parseInterval(cells[columns.interval]?.value) : undefined,
     };
 
     // Öffnungszeiten: eine Textspalte …
@@ -369,6 +375,7 @@ function timeFields(row: ImportRow): Partial<Practice> {
   if (row.openingText) out.openingText = row.openingText;
   if (row.parkMinutes !== undefined) out.parkMinutes = row.parkMinutes;
   if (row.visitMinutes !== undefined) out.visitMinutes = row.visitMinutes;
+  if (row.visitIntervalDays !== undefined) out.visitIntervalDays = row.visitIntervalDays;
   return out;
 }
 
@@ -417,6 +424,8 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       kind: row.kindSource === 'default' || (row.kind === 'praxis' && !match.kind) ? match.kind : row.kind,
     };
     if (next.kind === undefined) delete next.kind;
+    // Kundenstatus: In der App gesetzt bleibt er, bis sich der Status in der Excel ändert
+    if (row.status !== match.status) delete next.customerState;
     if (addressChanged) {
       next.geoStatus = 'pending';
       delete next.lat;

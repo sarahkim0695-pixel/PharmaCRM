@@ -16,6 +16,7 @@ import { territoryView } from './views/territory-view';
 import { visitFormView } from './views/visit-form';
 import { appointmentSection, visitsSection } from './views/visits-section';
 import { hoursSection } from './views/hours-section';
+import { customerSection } from './views/customer-section';
 import { visitsView } from './views/visits-view';
 import { productsSection, productsView } from './views/products-view';
 import { backupView, startBackupReminder } from './views/backup-view';
@@ -43,6 +44,7 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
 };
 
 /** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
+registerDetailSection(customerSection);
 registerDetailSection(hoursSection);
 registerDetailSection(appointmentSection);
 registerDetailSection(visitsSection);

@@ -7,6 +7,7 @@ import { store } from '../state/store';
 import type { FacilityKind, Practice } from '../types';
 import { h, setChildren } from '../ui/dom';
 import { KIND_LABEL } from '../utils/kind';
+import { STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { toast } from '../ui/toast';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -41,7 +42,17 @@ export function practiceFormView(route: Route): View {
   const street = input('street', p.street, { placeholder: 'Straße und Hausnummer' });
   const plz = input('plz', p.plz, { inputmode: 'numeric', maxlength: 5, pattern: '\\d{5}', placeholder: '80331' });
   const city = input('city', p.city, { placeholder: 'Ort' });
-  const status = input('status', p.status ?? (isNew ? 'kein Kunde' : ''), { list: 'dl-status', placeholder: 'z. B. Kunde' });
+  // Kundenstatus: aktiv / im Gespräch / kein Kunde (oder offen)
+  let state: StateKey = isNew ? 'kein' : stateKeyOf(p as Practice);
+  const stateSeg = h('div', { class: 'segmented' });
+  const renderState = () =>
+    setChildren(
+      stateSeg,
+      STATE_KEYS.map((k) =>
+        h('button', { type: 'button', class: ['seg', state === k && 'on'], onclick: () => { state = k; renderState(); } }, k === 'offen' ? 'offen' : STATE_LABEL[k]),
+      ),
+    );
+  renderState();
   const phone = input('phone', p.phone, { type: 'tel', placeholder: 'optional' });
   const hint = h('textarea', { name: 'hint', rows: 3, placeholder: 'optional' }, p.hint ?? '');
   const review = h('input', { type: 'checkbox', class: 'switch', checked: !!p.needsReview });
@@ -63,12 +74,11 @@ export function practiceFormView(route: Route): View {
     field('Fachrichtung', specialty),
     field('Straße', street),
     h('div', { class: 'grid-2' }, field('PLZ', plz), field('Ort', city)),
-    field('Status', status, 'Vorschläge erscheinen beim Tippen.'),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Kundenstatus'), stateSeg),
     field('Telefon', phone),
     field('Hinweis', hint),
     h('label', { class: 'switch-row' }, h('span', null, 'Als „prüfen“ markieren'), review),
     datalist('dl-specialty', distinctValues('specialty')),
-    datalist('dl-status', [...new Set(['Kunde', 'kein Kunde', ...distinctValues('status')])]),
     h(
       'div',
       { class: 'form-actions' },
@@ -104,7 +114,8 @@ export function practiceFormView(route: Route): View {
       street: street.value.trim(),
       plz: plzVal,
       city: city.value.trim(),
-      status: status.value.trim(),
+      status: p.status ?? '',
+      customerState: state === 'offen' ? undefined : state,
       phone: phone.value.trim(),
       hint: hint.value.trim(),
       needsReview: review.checked,

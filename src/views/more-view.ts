@@ -5,7 +5,7 @@ import { filterState } from '../state/filters';
 import { store } from '../state/store';
 import { confirmDialog } from '../ui/dialog';
 import { h, setChildren } from '../ui/dom';
-import { colorForStatus, statusKey } from '../utils/colors';
+import { formatInterval, INTERVAL_CHOICES, STATE_KEYS, STATE_LABEL, stateColor } from '../utils/customer';
 import { relativeDays } from '../utils/dates';
 import { plural } from '../utils/text';
 import { toast } from '../ui/toast';
@@ -117,42 +117,49 @@ export function settingsView(): View {
           toast('Gespeichert');
         },
       });
-    const options = statusOptions();
+    const counts = new Map(statusOptions().map((o) => [o.key, o.count]));
     setChildren(
       el,
       pageHeader({ title: 'Einstellungen', back: '/mehr' }),
       tourSettingsSection(),
       section(
-        'Farben der Status',
-        h('p', { class: 'muted small' }, 'Tippe auf eine Farbe, um sie zu ändern.'),
-        options.length
-          ? h(
-              'ul',
-              { class: 'color-list' },
-              options.map((o) =>
-                h(
-                  'li',
-                  null,
-                  h('input', {
-                    type: 'color',
-                    value: colorForStatus(o.key, s.statusColors),
-                    'aria-label': `Farbe für ${o.label}`,
-                    onchange: (e: Event) =>
-                      void store.updateSettings({ statusColors: { ...store.settings.statusColors, [statusKey(o.key)]: (e.target as HTMLInputElement).value } }),
-                  }),
-                  h('span', { class: 'grow' }, o.label),
-                  h('span', { class: 'muted' }, String(o.count)),
+        'Kundenstatus: Farben & Besuchsintervall',
+        h('p', { class: 'muted small' }, 'Farbe antippen zum Ändern. Das Intervall gilt für alle Einträge ohne eigenes Intervall.'),
+        h(
+          'ul',
+          { class: 'color-list' },
+          STATE_KEYS.map((key) =>
+            h(
+              'li',
+              null,
+              h('input', {
+                type: 'color',
+                value: stateColor(key, s),
+                'aria-label': `Farbe für ${STATE_LABEL[key]}`,
+                onchange: (e: Event) =>
+                  void store.updateSettings({ statusColors: { ...store.settings.statusColors, [key]: (e.target as HTMLInputElement).value } }),
+              }),
+              h('span', { class: 'grow' }, STATE_LABEL[key], h('span', { class: 'muted small' }, ` (${counts.get(key) ?? 0})`)),
+              h(
+                'select',
+                {
+                  class: 'interval-select',
+                  'aria-label': `Besuchsintervall ${STATE_LABEL[key]}`,
+                  onchange: (e: Event) => {
+                    void store.updateSettings({ intervalDefaults: { ...store.settings.intervalDefaults, [key]: Number((e.target as HTMLSelectElement).value) } });
+                    toast('Gespeichert');
+                  },
+                },
+                [...new Set([...INTERVAL_CHOICES, s.intervalDefaults[key]])].sort((a, b) => a - b).map((d) =>
+                  h('option', { value: String(d), selected: s.intervalDefaults[key] === d }, `alle ${formatInterval(d)}`),
                 ),
               ),
-            )
-          : h('p', { class: 'muted' }, 'Status erscheinen hier, sobald Praxen importiert sind.'),
+            ),
+          ),
+        ),
         Object.keys(s.statusColors).length
           ? h('button', { class: 'btn btn-sm', onclick: () => void store.updateSettings({ statusColors: {} }) }, 'Standardfarben')
           : null,
-      ),
-      section(
-        'Besuche',
-        field('„Lange nicht besucht“ ab … Tagen', numberInput(s.staleDays, 1, (v) => void store.updateSettings({ staleDays: v }))),
       ),
       section(
         'Backup',

@@ -8,7 +8,7 @@ import { confirmDialog } from '../ui/dialog';
 import { h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { colorForStatus } from '../utils/colors';
+import { practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
 import { formatDate } from '../utils/dates';
 import { KIND_LABEL, kindOf } from '../utils/kind';
 import { fullAddress } from '../utils/maps';
@@ -85,7 +85,7 @@ export function duplicatesView(): View {
                   'span',
                   { class: 'badges' },
                   kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
-                  p.status && h('span', { class: 'badge badge-soft', style: { '--badge': colorForStatus(p.status, store.settings.statusColors) } }, p.status),
+                  h('span', { class: 'badge badge-soft', style: { '--badge': practiceColor(p, store.settings) } }, STATE_LABEL[stateKeyOf(p)]),
                   h('span', { class: 'badge badge-info' }, plural(visits, 'Besuch', 'Besuche')),
                   products ? h('span', { class: 'badge badge-info' }, plural(products, 'Produkt', 'Produkte')) : null,
                   h('span', { class: 'muted small' }, `angelegt ${formatDate(p.createdAt.slice(0, 10))}`),
