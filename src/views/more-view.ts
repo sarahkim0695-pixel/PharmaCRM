@@ -12,6 +12,7 @@ import { toast } from '../ui/toast';
 import { menuItem, pageHeader, section, field, type View } from './common';
 import { statusOptions } from '../state/selectors';
 import { APP_VERSION } from '../version';
+import { tourSettingsSection } from './tour-settings';
 
 export function moreView(): View {
   const el = h('div', { class: 'page' });
@@ -55,7 +56,7 @@ export function moreView(): View {
       h(
         'nav',
         { class: 'menu card' },
-        menuItem({ icon: 'settings', label: 'Einstellungen', sub: 'Farben, Erinnerungen', href: '#/einstellungen' }),
+        menuItem({ icon: 'settings', label: 'Einstellungen', sub: 'Startadresse, Arbeitszeit, Farben, Erinnerungen', href: '#/einstellungen' }),
         menuItem({ icon: 'info', label: 'Hilfe & Installation', sub: 'Auf dem iPad einrichten', href: '#/hilfe' }),
         menuItem({ icon: 'trash', label: 'Alle Daten löschen', danger: true, onclick: () => void clearAll() }),
       ),
@@ -116,6 +117,7 @@ export function settingsView(): View {
     setChildren(
       el,
       pageHeader({ title: 'Einstellungen', back: '/mehr' }),
+      tourSettingsSection(),
       section(
         'Farben der Status',
         h('p', { class: 'muted small' }, 'Tippe auf eine Farbe, um sie zu ändern.'),
@@ -154,7 +156,11 @@ export function settingsView(): View {
       ),
     );
   }
-  const unsub = store.subscribe(render);
+  // Nur bei geänderten Einstellungen neu zeichnen – sonst gingen Eingaben verloren,
+  // während z. B. die Adresssuche im Hintergrund Praxen speichert.
+  const unsub = store.subscribe((k) => {
+    if (k.has('settings')) render();
+  });
   render();
   return { el, destroy: unsub };
 }

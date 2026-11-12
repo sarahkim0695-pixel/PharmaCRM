@@ -7,6 +7,7 @@ import { iconEl } from '../ui/icons';
 import { colorForStatus, statusLabel } from '../utils/colors';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { appleMapsUrl, fullAddress } from '../utils/maps';
+import { addPracticeToTour } from '../views/tour-view';
 
 export function statusBadge(p: Practice) {
   const color = colorForStatus(p.status, store.settings.statusColors);
@@ -48,6 +49,7 @@ export function buildPopup(p: Practice): HTMLElement {
         iconEl('note', 18),
         'Besuch',
       ),
+      h('button', { class: 'btn btn-sm', onclick: () => void addPracticeToTour(p.id) }, iconEl('plus', 18), 'Tour'),
       h(
         'button',
         { class: 'btn btn-sm btn-primary', onclick: () => navigate(`/praxis/${p.id}`) },

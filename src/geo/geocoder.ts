@@ -233,3 +233,16 @@ export async function retryGeocode(p: Practice): Promise<void> {
   await store.savePractice({ ...p, geoStatus: 'pending' });
   geocodeQueue.start();
 }
+
+/** Freitext-Adresse suchen (z. B. die eigene Startadresse). */
+export async function geocodeText(
+  q: string,
+  fetchFn: FetchFn = (u) => fetch(u, { headers: { 'Accept-Language': 'de' } }),
+): Promise<{ lat: number; lng: number; label: string } | null> {
+  const hits = await throttledFetch(
+    `${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=de,at&accept-language=de`,
+    fetchFn,
+  );
+  if (!hits.length) return null;
+  return { lat: parseFloat(hits[0].lat), lng: parseFloat(hits[0].lon), label: hits[0].display_name };
+}

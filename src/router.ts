@@ -15,6 +15,7 @@ export type RouteName =
   | 'map-practice'
   | 'map-pin'
   | 'map-territory'
+  | 'map-tour'
   | 'list'
   | 'practice'
   | 'practice-edit'
@@ -28,13 +29,15 @@ export type RouteName =
   | 'products'
   | 'backup'
   | 'settings'
-  | 'help';
+  | 'help'
+  | 'tour';
 
 const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/karte\/?$/, 'map', []],
   [/^\/karte\/praxis\/([^/]+)$/, 'map-practice', ['id']],
   [/^\/karte\/pin\/([^/]+)$/, 'map-pin', ['id']],
   [/^\/karte\/gebiet$/, 'map-territory', []],
+  [/^\/karte\/tour\/(\d{4}-\d{2}-\d{2})$/, 'map-tour', ['date']],
   [/^\/liste$/, 'list', []],
   [/^\/praxis\/neu$/, 'practice-new', []],
   [/^\/praxis\/([^/]+)\/bearbeiten$/, 'practice-edit', ['id']],
@@ -49,6 +52,8 @@ const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/backup$/, 'backup', []],
   [/^\/einstellungen$/, 'settings', []],
   [/^\/hilfe$/, 'help', []],
+  [/^\/tour$/, 'tour', []],
+  [/^\/tour\/(\d{4}-\d{2}-\d{2})$/, 'tour', ['date']],
 ];
 
 export function parseHash(hash: string): Route {

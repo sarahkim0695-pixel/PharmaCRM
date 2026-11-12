@@ -23,7 +23,8 @@ export function visitFormView(route: Route): View {
   // Frühere Ansprechpartner dieser Praxis als Vorschläge
   const contacts = [...new Set(store.visitsFor(practiceId).map((v) => v.contact).filter(Boolean))].sort(collator.compare);
 
-  const date = h('input', { type: 'date', value: existing?.date ?? todayStr(), max: todayStr(new Date(Date.now() + 86_400_000 * 365)) });
+  const presetDate = route.query.get('datum'); // z. B. aus der Tour
+  const date = h('input', { type: 'date', value: existing?.date ?? presetDate ?? todayStr(), max: todayStr(new Date(Date.now() + 86_400_000 * 365)) });
   const contact = h('input', { value: existing?.contact ?? contacts[0] ?? '', list: 'dl-contacts', placeholder: 'z. B. Dr. Muster, Fr. Beispiel (MFA)', autocomplete: 'off' });
   const note = h('textarea', { rows: 7, placeholder: 'Was wurde besprochen? Muster, Bestellung, nächste Schritte …' }, existing?.note ?? '');
   const [apDate, apTime] = (practice.nextAppointment ?? '').split('T');

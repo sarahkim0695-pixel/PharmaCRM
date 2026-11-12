@@ -33,7 +33,24 @@ const FAKE_COORDS = {
   'rathausplatz 2|85049': [48.7651, 11.4237],
   'rathausplatz 22': [47.7286, 10.3158],
   'konigstrasse 24': [47.8561, 12.1289],
+  'karlsplatz 1': [48.1390, 11.5655],
 };
+
+/** Falscher Routing-Server: Fahrzeit aus Luftlinie (wie die Schätzung in der App) */
+function fakeOsrm(url) {
+  const coords = decodeURIComponent(url.split('/driving/')[1].split('?')[0]).split(';').map((c) => c.split(',').map(Number));
+  const est = ([lng1, lat1], [lng2, lat2]) => {
+    const R = 6371, rad = Math.PI / 180;
+    const s = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lng2 - lng1) * rad) / 2) ** 2;
+    const km = 2 * R * Math.asin(Math.sqrt(s)) * 1.3;
+    const speed = km < 5 ? 25 : km < 20 ? 40 : km < 50 ? 60 : 75;
+    return { sec: km < 0.05 ? 0 : ((km / speed) * 60 + 3) * 60, m: km * 1000 };
+  };
+  if (url.includes('/table/')) {
+    return { code: 'Ok', durations: coords.map((a) => coords.map((b) => est(a, b).sec)), distances: coords.map((a) => coords.map((b) => est(a, b).m)) };
+  }
+  return { code: 'Ok', routes: [{ geometry: { coordinates: coords } }] };
+}
 
 function fakeNominatim(url) {
   const u = new URL(url);
@@ -70,6 +87,9 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (!real) {
+    await page.route('https://routing.openstreetmap.de/**', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeOsrm(route.request().url())) }),
+    );
     await page.route('https://nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify(fakeNominatim(route.request().url())) }),
     );
@@ -236,6 +256,55 @@ try {
   await page.waitForSelector('[aria-label="Wundauflage A"] .seg-kauft.on');
   await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
   (await import('node:fs')).rmSync(backupPath);
+
+  // 14. Öffnungszeiten aus der Excel in der Praxis-Ansicht
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', 'Anna');
+  await page.waitForTimeout(400);
+  await page.locator('.prow', { hasText: 'Anna Beispiel' }).click();
+  await page.waitForSelector('.hours-table');
+  assert.match(await page.locator('.hours-table').innerText(), /Mo\s+08:00–12:00, 14:00–18:00/);
+  assert.match(await page.locator('.duration-row').innerText(), /10 min[\s\S]*Parken[\s\S]*20 min[\s\S]*vor Ort/);
+  await shot('16-detail-oeffnungszeiten');
+  await page.fill('.search-input', '').catch(() => {});
+
+  // 15. Tourplanung: Startadresse festlegen
+  await page.goto(`${BASE}#/einstellungen`);
+  await page.fill('input[autocomplete="street-address"]', 'Karlsplatz 1, 80335 München');
+  await page.getByRole('button', { name: 'Suchen & speichern' }).click();
+  await page.waitForSelector('text=Startadresse gespeichert');
+
+  // 16. Tour für den nächsten Dienstag planen
+  const d = new Date();
+  do d.setDate(d.getDate() + 1); while (d.getDay() !== 2);
+  const tuesday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  await page.waitForSelector('text=Noch keine Praxen');
+  await page.getByRole('button', { name: 'Praxen auswählen' }).click();
+  await page.waitForSelector('.pick');
+  const picks = page.locator('.pick:not(.already)');
+  for (let i = 0; i < 6; i++) await picks.nth(i).click();
+  await page.getByRole('button', { name: /Übernehmen \(6\)/ }).click();
+  assert.equal(await page.locator('.stop').count(), 6);
+  await page.getByRole('button', { name: 'Tour berechnen' }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  const visitsPlanned = await page.locator('.tl-visit').count();
+  assert.ok(visitsPlanned >= 4, `nur ${visitsPlanned} Besuche eingeplant`);
+  assert.ok(await page.locator('.tl-break').count() === 1, 'Mittagspause fehlt');
+  assert.match(await page.locator('.tl-point').first().innerText(), /Abfahrt Zuhause/);
+  await shot('17-tour-plan');
+  await page.locator('.timeline').screenshot({ path: join(shots ?? root, '18-tour-zeitplan.png') }).catch(() => {});
+
+  // 17. Tour auf der Karte
+  await page.getByRole('button', { name: 'Auf Karte zeigen' }).click();
+  await page.waitForSelector('.tour-pin');
+  assert.equal(await page.locator('.tour-pin').count(), visitsPlanned);
+  await page.waitForTimeout(600);
+  await shot('19-tour-karte');
+
+  // 18. „Zur Tour“ aus der Kurzinfo einer Praxis
+  await page.goto(`${BASE}#/karte`);
+  await page.waitForTimeout(500);
 
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');

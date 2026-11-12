@@ -15,9 +15,11 @@ import { practiceFormView } from './views/practice-form';
 import { territoryView } from './views/territory-view';
 import { visitFormView } from './views/visit-form';
 import { appointmentSection, visitsSection } from './views/visits-section';
+import { hoursSection } from './views/hours-section';
 import { visitsView } from './views/visits-view';
 import { productsSection, productsView } from './views/products-view';
 import { backupView, startBackupReminder } from './views/backup-view';
+import { tourView } from './views/tour-view';
 
 /** Seiten-Fabriken je Route. Neue Seiten hier eintragen. */
 const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
@@ -35,9 +37,11 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
   'visit-edit': visitFormView,
   products: productsView,
   backup: backupView,
+  tour: tourView,
 };
 
 /** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
+registerDetailSection(hoursSection);
 registerDetailSection(appointmentSection);
 registerDetailSection(visitsSection);
 registerDetailSection(productsSection);
@@ -47,13 +51,15 @@ export function registerPage(name: RouteName, factory: (r: Route) => View): void
   PAGES[name] = factory;
 }
 
-type Tab = 'map' | 'list' | 'visits' | 'more';
+type Tab = 'map' | 'list' | 'tour' | 'visits' | 'more';
 
 const TAB_OF: Record<RouteName, Tab> = {
   map: 'map',
   'map-practice': 'map',
   'map-pin': 'map',
   'map-territory': 'map',
+  'map-tour': 'tour',
+  tour: 'tour',
   list: 'list',
   practice: 'list',
   'practice-edit': 'list',
@@ -79,6 +85,7 @@ export function startApp(root: HTMLElement): void {
   const tabs: Record<Tab, HTMLAnchorElement> = {
     map: tabLink('#/karte', 'map', 'Karte'),
     list: tabLink('#/liste', 'list', 'Praxen'),
+    tour: tabLink('#/tour', 'route', 'Tour'),
     visits: tabLink('#/besuche', 'calendar', 'Besuche'),
     more: tabLink('#/mehr', 'more', 'Mehr'),
   };
@@ -105,6 +112,7 @@ export function startApp(root: HTMLElement): void {
       if (route.name === 'map-practice') mapView.setMode({ kind: 'focus', practiceId: route.params.id });
       else if (route.name === 'map-pin') mapView.setMode({ kind: 'pin', practiceId: route.params.id });
       else if (route.name === 'map-territory') mapView.setMode({ kind: 'territory' });
+      else if (route.name === 'map-tour') mapView.setMode({ kind: 'tour', date: route.params.date });
       else mapView.setMode({ kind: 'normal' });
       if (route.query.has('fit')) setTimeout(() => mapView.fitAll(), 300);
       return;
