@@ -21,6 +21,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = join(root, 'tests/fixtures/Beispiel-Praxisliste.xlsx');
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
+/** Arbeitsdateien des Tests (wird von git ignoriert) */
+const outDir = shots ?? join(root, 'test-results');
+mkdirSync(outDir, { recursive: true });
 const PORT = 4173;
 const BASE = `http://localhost:${PORT}/`;
 
@@ -243,7 +246,7 @@ try {
   await page.goto(`${BASE}#/backup`);
   await shot('15-backup');
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Backup jetzt erstellen' }).click()]);
-  const backupPath = join(shots ?? root, 'test-backup.json');
+  const backupPath = join(outDir, 'test-backup.json');
   await download.saveAs(backupPath);
   assert.match(download.suggestedFilename(), /^RepMap-Backup-\d{4}-\d{2}-\d{2}\.json$/);
   const backup = JSON.parse((await import('node:fs')).readFileSync(backupPath, 'utf8'));
@@ -310,7 +313,7 @@ try {
   assert.match(await page.locator('.tl-point').first().innerText(), /Abfahrt Zuhause/);
   assert.equal(await page.locator('text=Fahrzeiten nur geschätzt').count(), 0, 'Routing-Server nicht erreicht');
   await shot('17-tour-plan');
-  await page.locator('.timeline').screenshot({ path: join(shots ?? root, '18-tour-zeitplan.png') }).catch(() => {});
+  if (shots) await page.locator('.timeline').screenshot({ path: join(shots, '18-tour-zeitplan.png') }).catch(() => {});
 
   // 17. Tour auf der Karte
   await page.getByRole('button', { name: 'Auf Karte zeigen' }).click();
@@ -328,7 +331,7 @@ try {
 } catch (err) {
   // Bildschirmfoto vom Fehlerzustand
   const pages = browser?.contexts()[0]?.pages() ?? [];
-  if (pages[0]) await pages[0].screenshot({ path: join(shots ?? root, 'e2e-fehler.png') }).catch(() => {});
+  if (pages[0]) await pages[0].screenshot({ path: join(outDir, 'e2e-fehler.png') }).catch(() => {});
   throw err;
 } finally {
   await browser?.close();
