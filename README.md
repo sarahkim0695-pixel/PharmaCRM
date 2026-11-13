@@ -16,6 +16,7 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | 📣 **Veranstaltungen** | Einmal eintragen – gilt für alle Praxen. Pro Praxis: „noch nicht angefragt“, „kein Interesse“ oder „Interesse“. |
 | 🚦 **Kundenstatus & Intervall** | Ampel je Praxis: 🟢 bestellender Kunde, 🟠 in den Startlöchern, 🔴 nicht in Kontakt – und wie oft besucht werden soll (für jede Praxis kürzer oder länger einstellbar). Die App zeigt, wann ein Besuch fällig ist. |
 | 🕘 **Öffnungszeiten** | Aus der Excel oder in der App: Öffnungszeiten je Wochentag und Zeitaufwand pro Praxis (Parken & Weg, vor Ort). |
+| 🎙️ **Sprachsteuerung** | Tour per Sprache planen: „Morgen in Augsburg, Dr. Huber um 10 fest, Rest auffüllen, Mittagspause halb eins“ – die App zeigt, was sie verstanden hat, und plant los. Läuft komplett auf dem Gerät. |
 | 🚗 **Tourplanung** | Optimierte Tagestour mit Uhrzeiten: beachtet Öffnungszeiten, Termine, Fahrzeiten, deine Mittagspause und den Feierabend. Region wählen → Tour-Vorschlag; feste Praxen → passende Besuche auf der Strecke. Packliste für den Morgen. |
 | 🛡️ **Backup** | Alle Daten als Datei sichern und wiederherstellen. Erinnerung, wenn ein Backup fällig ist. |
 
@@ -204,12 +205,44 @@ Die Veranstaltung erscheint sofort bei **allen** Praxen und Kliniken. In der Pra
    - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
+   **Längerer Termin?** In der Zeile **⏱ Vor Ort** bei der Praxis mit **+** die Dauer erhöhen (bzw. mit **−** verkürzen) – 5 Minuten bis 4 Stunden. Das gilt **nur für diesen Tag**; der normale Zeitaufwand der Praxis bleibt. „Standard (… min)“ setzt zurück. Danach **Neu berechnen** – im Zeitplan steht dann „länger eingeplant“.
 5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, Praxen in den Startlöchern und bestellende Kunden zuerst – und rechnet sie gleich durch.
    **Vorschläge aus**: Standardmäßig schlägt die App nur Orthopäden vor; mit den Knöpfen darüber nimmst du z. B. Hausärzte dazu. Auch unter „Praxen auswählen“ kannst du die Gruppen ein- und ausschalten.
 6. **Feste Praxen + passende Besuche**: 1–2 Praxen auswählen (z. B. ein Termin) und **Passende Besuche ergänzen** tippen. Die App sucht fällige Praxen **auf der Strecke** (wenig Umweg) und **in der Nähe** und plant so viele ein, wie in den Tag passen (höchstens die eingestellte Zahl Besuche). Auch bei einer Wartezeit hilft **Lücke füllen**.
 7. **Packliste**: Unter „Packliste & Notizen“ trägst du ein, was du an diesem Tag allgemein brauchst, und bei jeder Praxis unter „Mitbringen“ (🎒), was du dort mitbringen willst – z. B. „Muster A, Katalog“. Daraus entsteht automatisch eine Liste zum Abhaken; gleiche Dinge erscheinen nur einmal mit allen Praxen dazu.
 8. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
 9. **Auf Karte zeigen**: nummerierte Stopps und Strecke. **Ganze Route (Google Maps)** öffnet alle Stopps auf einmal (bis 9 Zwischenstopps).
+
+#### 🎙️ Tour per Sprache planen
+
+Im Tab **Tour** ganz oben auf **Per Sprache planen** tippen → aufs große **Mikrofon** tippen und sprechen (oder ins Feld tippen bzw. über das 🎤 der Tastatur diktieren). Die App zeigt sofort **„Das habe ich verstanden“** – passt alles, auf **Ausführen** tippen. Dann wird die Tour eingetragen, mit passenden Besuchen ergänzt und berechnet; nach einer gesprochenen Anweisung liest die App das Ergebnis kurz vor.
+
+Beispiele:
+- „Morgen Tour in Augsburg, nur fällige Orthopäden, maximal 6 Besuche, Mittagspause halb eins“
+- „Dienstag Dr. Huber um 10 Uhr fest, Praxis am Dom wenn es passt, Rest auffüllen, ohne Dr. Lang“
+- „Nächste Woche Freitag rund um Landshut, auch Hausärzte, nur Kunden in den Startlöchern“
+- „Ab 7:30 los, bis 16 Uhr fertig, keine Mittagspause“
+- „Muster A und Katalog für Dr. Huber mitnehmen, Visitenkarten einpacken“ (→ Packliste)
+- „Notiz: Parkhaus am Dom nehmen“
+
+| Das versteht die App | Zum Beispiel |
+| --- | --- |
+| Tag | „heute“, „morgen“, „übermorgen“, „Dienstag“, „nächste Woche Freitag“, „am 3.12.“, „am 5. Januar“ |
+| Ort / Umkreis | „in Augsburg“ (+10 km), „nur in Augsburg“, „rund um Landshut“ (+15 km), „im Umkreis von 20 km“ |
+| Praxen | „Dr. Huber“, „Doktor Maier“ (findet auch Meier/Meyer), „Praxis am Dom“; „um 10 Uhr“ = Termin; „dauert eine Stunde“ / „90 Minuten einplanen“ = längerer Besuch; „wenn es passt“ = optional; „ohne …“ / „… weglassen“ |
+| Auswahl | „Rest auffüllen“, „nur fällige“, „nur Orthopäden“, „auch Hausärzte“, „ohne Kliniken“, „nur bestellende Kunden“ / „in den Startlöchern“ / „nicht in Kontakt“ |
+| Zeiten | „ab 7:30 los“, „bis 16 Uhr fertig“, „um 17 Uhr zuhause“, „maximal 6 Besuche“, „halb neun“, „viertel nach acht“, „dreiviertel neun“ |
+| Mittagspause | „Mittagspause halb eins“, „Mittagspause von 12:30 bis 13:15“, „zwischen 12 und 14 Uhr, 30 Minuten“, „ohne Mittagspause“ |
+| Start / Ende | „von hier aus starten“, „nicht nach Hause zurück“, „neu anfangen“ |
+| Packliste / Notiz | „… für Dr. Huber mitnehmen“, „… einpacken“, „Notiz: …“ |
+| Sofort ausführen | am Ende „ausführen“ sagen |
+
+Gut zu wissen:
+- Passen mehrere Praxen zu einem Namen, wählst du in der Vorschau die richtige aus (die im genannten Ort ist vorausgewählt).
+- Was die App nicht verstanden hat, steht unter „Nicht verstanden“ – es wird nichts geraten.
+- Ein gesagter Termin („Dr. Huber um 10 Uhr“) wird bei der Praxis als nächster Termin eingetragen.
+- **Datenschutz:** Die Umwandlung von Sprache in Text übernimmt dein iPad (wie beim Diktieren). Was du gesagt hast, wertet RepMap direkt auf dem Gerät aus – deine Praxisdaten gehen dabei nirgends hin.
+- Funktioniert das Mikrofon in der App nicht (z. B. Mikrofon nicht erlaubt), diktiere einfach über das 🎤 der Tastatur ins Feld.
 
 Die Fahrzeiten kommen vom kostenlosen OpenStreetMap-Routing (inkl. einstellbarem Verkehrszuschlag, Standard 15 %). Ohne Internet schätzt die App sie grob und weist darauf hin.
 
@@ -282,6 +315,9 @@ src/
   tour/optimizer.ts       Tour-Optimierung (Zeitfenster, Pause, Feierabend) – reine Rechenlogik
   tour/planner.ts         Tagesplan: Praxen + Öffnungszeiten + Fahrzeiten → Optimierer → Uhrzeiten
   tour/travel.ts          Fahrzeiten/Strecke (OSRM-Routing der FOSSGIS, sonst Schätzung)
+  tour/voice.ts           Sprachsteuerung: deutsche Sätze → Anweisungen (Datum, Ort, Praxen, Zeiten …)
+  tour/voice-apply.ts     Sprachsteuerung: Anweisungen auf die Tour anwenden und berechnen
+  views/voice-sheet.ts    Sprachsteuerung: Mikrofon (Web Speech API), Vorschau, Ausführen
   geo/osm.ts              Overpass-Antwort → GeoJSON (Ringe zusammensetzen, nur Deutschland)
   map/map-view.ts         Karte: Gebiet, Pins, Bedienelemente, Gebiet bearbeiten, Pin setzen
   map/popup.ts            Kurzinfo beim Antippen eines Pins
@@ -295,7 +331,7 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen, Gruppen)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen, Gruppen, Sprache)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 

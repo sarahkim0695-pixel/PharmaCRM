@@ -110,4 +110,32 @@ describe('Tagesplan', () => {
     expect(plan.totals.departure).toBeGreaterThanOrEqual(13 * 60);
     expect(plan.startPoint.label).toBe('Aktueller Standort');
   });
+
+  it('nimmt die längere Dauer eines einzelnen Besuchs (nur für diesen Tag)', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([practice('a', 48.14, 11.56, { visitMinutes: 20 }), practice('b', 48.15, 11.58)]);
+    const tour = newTour('2026-11-11');
+    tour.stops = [{ practiceId: 'a', must: true, visitMinutes: 75 }, { practiceId: 'b', must: true }];
+    const plan = await computePlan(tour);
+    const dur = Object.fromEntries(plan.entries.flatMap((e) => (e.kind === 'visit' ? [[e.practiceId, e.end - e.start]] : [])));
+    expect(dur).toEqual({ a: 75, b: store.settings.tourDefaults.visitMinutes });
+    expect(store.getPractice('a')!.visitMinutes).toBe(20); // Standard der Praxis bleibt
+  });
+});
+
+describe('Dauer vor Ort einstellen', () => {
+  it('Plus/Minus springt in sinnvollen Schritten', async () => {
+    const { stepVisit, formatMinutes } = await import('../../src/tour/durations');
+    expect(stepVisit(20, 1)).toBe(25);
+    expect(stepVisit(30, 1)).toBe(45);
+    expect(stepVisit(45, 1)).toBe(60);
+    expect(stepVisit(60, -1)).toBe(45);
+    expect(stepVisit(22, 1)).toBe(25); // krumme Werte aus der Excel
+    expect(stepVisit(240, 1)).toBe(240);
+    expect(stepVisit(5, -1)).toBe(5);
+    expect(formatMinutes(45)).toBe('45 min');
+    expect(formatMinutes(90)).toBe('1 Std. 30 min');
+    expect(formatMinutes(120)).toBe('2 Std.');
+  });
 });

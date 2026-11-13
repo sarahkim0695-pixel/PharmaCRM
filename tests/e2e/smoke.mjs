@@ -512,6 +512,45 @@ try {
   assert.ok(await page.locator('.pin-letter').count() >= 1, 'kein Pin mit Buchstabe');
   await shot('26-karte-hausarzt');
 
+  // 27. Sprachsteuerung (hier getippt – auf dem iPad gesprochen)
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  await page.getByRole('button', { name: /Per Sprache planen/ }).click();
+  await page.waitForSelector('.voice-examples');
+  await shot('27-sprache-start');
+  await page.fill(
+    '.voice-text',
+    'Donnerstag Tour in Landshut, Orthopädie am Rathaus um 10 Uhr fest, auch Kliniken, Rest auffüllen, Mittagspause halb eins, maximal 4 Besuche, Muster A für Orthopädie am Rathaus mitnehmen',
+  );
+  await page.waitForSelector('.voice-list');
+  const understood = await page.locator('.voice-list').innerText();
+  for (const re of [/Tour für Donnerstag/, /Landshut \+ 10 km Umkreis/, /Orthopädie am Rathaus – fest, Termin 10:00 Uhr/, /Zusätzlich Kliniken/, /Mittagspause 12:30–13:15/, /max\. 4 Besuche/, /Muster A → Orthopädie am Rathaus/, /Mit passenden Besuchen auffüllen/]) {
+    assert.match(understood, re);
+  }
+  assert.equal(await page.locator('.voice-preview', { hasText: 'Nicht verstanden' }).count(), 0);
+  await shot('27b-sprache-vorschau');
+  await page.locator('dialog').getByRole('button', { name: 'Ausführen' }).click();
+  await page.waitForSelector('.page-head:has-text("Donnerstag")', { timeout: 30_000 });
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  assert.match(await page.locator('.timeline').innerText(), /Orthopädie am Rathaus/);
+  await page.waitForSelector('.tl-bring:has-text("Muster A")');
+  await page.waitForSelector('.toast:has-text("Tour für Donnerstag")');
+  await shot('27c-sprache-ergebnis');
+
+  // 28. Längerer Termin: Dauer vor Ort bei einem Besuch erhöhen (nur für diesen Tag)
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  const visitRow = page.locator('.stop-visit').first();
+  const before = await visitRow.locator('.stop-visit-value').innerText();
+  for (let i = 0; i < 3; i++) await visitRow.locator('.step-btn').last().click();
+  await page.waitForFunction((b) => document.querySelector('.stop-visit .stop-visit-value')?.textContent !== b, before);
+  await page.waitForSelector('.stop-visit.longer .link-btn:has-text("Standard")');
+  const longer = await page.locator('.stop-visit.longer .stop-visit-value').first().innerText();
+  await page.getByRole('button', { name: /Tour berechnen|Neu berechnen/ }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  await page.waitForSelector('.tl-visit .badge:has-text("länger eingeplant")');
+  assert.match(await page.locator('.tl-visit', { hasText: 'länger eingeplant' }).first().innerText(), new RegExp(`${longer} vor Ort`));
+  await page.locator('.stop-visit.longer').first().scrollIntoViewIfNeeded();
+  await shot('28-laengerer-termin');
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } catch (err) {

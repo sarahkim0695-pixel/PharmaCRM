@@ -10,7 +10,7 @@ import { dueInfo, dueText, STATE_LABEL, stateKeyOf, type StateKey } from '../uti
 import { parseDate } from '../utils/dates';
 import { normalize } from '../utils/text';
 import { nowIso } from '../utils/id';
-import { practiceDurations } from './durations';
+import { stopDurations } from './durations';
 import { hoursOn } from './opening-hours';
 import { optimizeTour, type OptStop } from './optimizer';
 import { routeGeometry, travelMatrix, type LatLng } from './travel';
@@ -75,6 +75,20 @@ export interface PlanOptions {
 
 export class PlanError extends Error {}
 
+/**
+ * Tour berechnen und automatisch vorgeschlagene Praxen, die nicht mehr hineinpassen,
+ * wieder herausnehmen. Ändert `tour` (Stopps + Plan).
+ */
+export async function planTour(tour: Tour, opts: PlanOptions = {}): Promise<{ removed: string[] }> {
+  const plan = await computePlan(tour, opts);
+  const notFitting = new Set(plan.dropped.map((d) => d.practiceId));
+  const removed = tour.stops.filter((s) => s.suggested && notFitting.has(s.practiceId)).map((s) => s.practiceId);
+  tour.stops = tour.stops.filter((s) => !removed.includes(s.practiceId)).map(({ suggested: _s, ...rest }) => rest);
+  plan.dropped = plan.dropped.filter((d) => !removed.includes(d.practiceId));
+  tour.plan = plan;
+  return { removed };
+}
+
 /** Berechnet den Tagesplan einer Tour (fragt dazu die Fahrzeiten ab). */
 export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<TourPlan> {
   const settings = store.settings;
@@ -99,7 +113,7 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
       dropped.push({ practiceId: p.id, reason: 'Kein Standort – bitte Pin setzen' });
       continue;
     }
-    const dur = practiceDurations(p);
+    const dur = stopDurations(p, s);
     const appt = appointmentOn(p, tour.date);
     let windows: TimeRange[];
     if (typeof appt === 'number') {
