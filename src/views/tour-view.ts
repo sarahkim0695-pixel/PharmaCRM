@@ -8,10 +8,10 @@ import { filterContext } from '../state/selectors';
 import { store } from '../state/store';
 import { formatMinutes, stepVisit, stopDurations } from '../tour/durations';
 import { formatRanges, formatTime, hoursOn, parseTime } from '../tour/opening-hours';
-import { addAppointments, appointmentOn, newTour, planTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
+import { addAppointments, appointmentOn, endModeOf, newTour, planTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
 import { KIND_KEYS, KIND_PLURAL, kindOf } from '../utils/kind';
 import { ROUTING_ATTRIBUTION, type LatLng } from '../tour/travel';
-import type { FacilityKind, PlanEntry, Practice, Tour } from '../types';
+import type { FacilityKind, PlanEntry, Place, Practice, Tour, TourBlock } from '../types';
 import { confirmDialog, openSheet } from '../ui/dialog';
 import { h, setChildren, type Child } from '../ui/dom';
 import { iconEl } from '../ui/icons';
@@ -20,6 +20,8 @@ import { dueInfo, dueText, practiceColor, STATE_LABEL, stateKeyOf } from '../uti
 import { packingList } from '../tour/packing';
 import { eventsToAsk } from './events-view';
 import { openVoicePlanner } from './voice-sheet';
+import { blockIcon, blockTimeText, newBlock, openBlockEditor } from './block-editor';
+import { openPlacePicker } from './place-picker';
 import { formatDateShort, parseDate, todayStr } from '../utils/dates';
 import { appleMapsUrl } from '../utils/maps';
 import { collator, normalize, plural } from '../utils/text';
@@ -190,6 +192,7 @@ export function tourView(route: Route): View {
       ),
       dayCard(upcoming),
       frameCard(),
+      blocksCard(),
       regionCard(),
       stopsCard(),
       h(
@@ -247,8 +250,17 @@ export function tourView(route: Route): View {
       h('label', { class: 'switch-row' }, h('span', null, label), h('input', { type: 'checkbox', class: 'switch', checked, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }));
     const L = tour.lunch;
     const maxVisits = tour.maxVisits ?? store.settings.tourDefaults.maxVisits;
+    const endMode = endModeOf(tour);
+    const startLabel = tour.startMode === 'place' && tour.startPlace ? `Start: ${tour.startPlace.label}` : tour.startMode === 'here' ? 'Start am Standort' : 'Start zuhause';
+    const endLabel = endMode === 'place' && tour.endPlace ? `Ziel: ${tour.endPlace.label}` : endMode === 'last' ? 'Ende beim letzten Termin' : 'Ziel zuhause';
+    const pickStart = () => openPlacePicker({ title: 'Startpunkt', current: tour.startPlace, onPick: (p: Place) => change((t) => { t.startMode = 'place'; t.startPlace = p; }) });
+    const pickEnd = () => openPlacePicker({ title: 'Ziel', current: tour.endPlace, onPick: (p: Place) => change((t) => { t.endMode = 'place'; t.endPlace = p; t.returnHome = true; }) });
+    const setEnd = (m: 'home' | 'last') => change((t) => { t.endMode = m; t.returnHome = m === 'home'; });
+    const placeLine = (p: Place | undefined, onEdit: () => void) =>
+      p ? h('p', { class: 'place-line' }, '📍 ', h('b', null, p.label), ` – ${p.address} `, h('button', { class: 'link-btn', onclick: onEdit }, 'ändern')) : null;
     const summary = [
-      tour.startMode === 'home' ? 'Start zuhause' : 'Start am Standort',
+      startLabel,
+      endLabel,
       `${formatTime(tour.dayStart)}–${formatTime(tour.dayEnd)}`,
       L.enabled ? `Pause ${L.minutes} min (${formatTime(L.from)}–${formatTime(L.to)})` : 'ohne Pause',
       `max. ${maxVisits} Besuche`,
@@ -258,12 +270,24 @@ export function tourView(route: Route): View {
       'details',
       { class: 'card details-card', open: frameOpen },
       h('summary', null, h('span', { class: 'card-title' }, 'Zeiten & Start'), h('span', { class: 'muted small' }, summary)),
+      h('span', { class: 'field-label' }, 'Start'),
       h(
         'div',
-        { class: 'segmented' },
-        h('button', { class: ['seg', tour.startMode === 'home' && 'on'], onclick: () => change((t) => (t.startMode = 'home')) }, 'Start zuhause'),
-        h('button', { class: ['seg', tour.startMode === 'here' && 'on'], onclick: () => change((t) => (t.startMode = 'here')) }, 'Aktueller Standort'),
+        { class: 'segmented segmented-3', role: 'radiogroup', 'aria-label': 'Start' },
+        h('button', { class: ['seg', tour.startMode === 'home' && 'on'], role: 'radio', 'aria-checked': String(tour.startMode === 'home'), onclick: () => change((t) => (t.startMode = 'home')) }, 'Zuhause'),
+        h('button', { class: ['seg', tour.startMode === 'here' && 'on'], role: 'radio', 'aria-checked': String(tour.startMode === 'here'), onclick: () => change((t) => (t.startMode = 'here')) }, 'Mein Standort'),
+        h('button', { class: ['seg', tour.startMode === 'place' && 'on'], role: 'radio', 'aria-checked': String(tour.startMode === 'place'), onclick: () => (tour.startPlace ? change((t) => (t.startMode = 'place')) : pickStart()) }, 'Andere Adresse'),
       ),
+      tour.startMode === 'place' ? placeLine(tour.startPlace, pickStart) : null,
+      h('span', { class: 'field-label' }, 'Ziel'),
+      h(
+        'div',
+        { class: 'segmented segmented-3', role: 'radiogroup', 'aria-label': 'Ziel' },
+        h('button', { class: ['seg', endMode === 'home' && 'on'], role: 'radio', 'aria-checked': String(endMode === 'home'), onclick: () => setEnd('home') }, 'Zuhause'),
+        h('button', { class: ['seg', endMode === 'last' && 'on'], role: 'radio', 'aria-checked': String(endMode === 'last'), onclick: () => setEnd('last') }, 'Letzter Termin'),
+        h('button', { class: ['seg', endMode === 'place' && 'on'], role: 'radio', 'aria-checked': String(endMode === 'place'), onclick: () => (tour.endPlace ? change((t) => { t.endMode = 'place'; t.returnHome = true; }) : pickEnd()) }, 'Andere Adresse'),
+      ),
+      endMode === 'place' ? placeLine(tour.endPlace, pickEnd) : null,
       home
         ? h('p', { class: 'muted small' }, `Zuhause: ${home.address} (`, h('a', { href: '#/einstellungen' }, 'ändern'), ')')
         : h('div', { class: 'notice notice-warn' }, iconEl('warning', 20), h('span', null, 'Noch keine Startadresse. ', h('a', { href: '#/einstellungen' }, 'Jetzt festlegen'))),
@@ -275,7 +299,6 @@ export function tourView(route: Route): View {
         'Höchstens so viele Besuche',
         h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 40, value: String(maxVisits), onchange: (e: Event) => change((t) => (t.maxVisits = Math.min(40, Math.max(1, Number((e.target as HTMLInputElement).value) || maxVisits)))) }),
       ),
-      switchRow('Am Ende zurück nach Hause', tour.returnHome, (v) => change((t) => (t.returnHome = v))),
       switchRow('Mittagspause einplanen', L.enabled, (v) => change((t) => (t.lunch.enabled = v))),
       L.enabled
         ? h('div', { class: 'grid-3' },
@@ -287,6 +310,53 @@ export function tourView(route: Route): View {
     );
     details.addEventListener('toggle', () => (frameOpen = details.open));
     return details;
+  }
+
+  /** Weitere Pausen und Platzhalter (z. B. Online-Schulung) */
+  function blocksCard() {
+    const blocks = [...(tour.blocks ?? [])].sort((a, b) => a.from - b.from);
+    const edit = (b: TourBlock, isNew: boolean) =>
+      openBlockEditor({
+        block: b,
+        isNew,
+        onSave: (saved) => change((t) => (t.blocks = [...(t.blocks ?? []).filter((x) => x.id !== saved.id), saved])),
+        onDelete: () => change((t) => (t.blocks = (t.blocks ?? []).filter((x) => x.id !== b.id))),
+      });
+    return section(
+      h('span', null, 'Pausen & Platzhalter', blocks.length ? h('span', { class: 'muted small' }, ` (${blocks.length})`) : null),
+      blocks.length
+        ? h(
+            'ul',
+            { class: 'block-list' },
+            blocks.map((b) =>
+              h(
+                'li',
+                null,
+                h(
+                  'button',
+                  { class: 'block-item', onclick: () => edit(b, false) },
+                  h('span', { class: 'block-icon' }, blockIcon(b.kind)),
+                  h('span', { class: 'prow-main' },
+                    h('span', { class: 'prow-title' }, b.title),
+                    h('span', { class: 'prow-sub' }, blockTimeText(b), b.place ? ` · 📍 ${b.place.label}` : b.kind === 'termin' ? ' · ohne Ort' : ''),
+                  ),
+                  iconEl('edit', 18),
+                ),
+                h('button', { class: 'icon-btn', 'aria-label': `${b.title} entfernen`, onclick: () => change((t) => (t.blocks = (t.blocks ?? []).filter((x) => x.id !== b.id))) }, iconEl('close', 20)),
+              ),
+            ),
+          )
+        : h('p', { class: 'muted small' }, 'Weitere Pausen (z. B. Kaffeepause) oder Platzhalter für Online-Schulungen, Telefonkonferenzen, Büro … – zu einer festen Uhrzeit oder flexibel in einem Zeitfenster.'),
+      h(
+        'div',
+        { class: 'row' },
+        h('button', { class: 'btn', onclick: () => edit(newBlock('pause'), true) }, iconEl('plus', 20), 'Pause'),
+        h('button', { class: 'btn', onclick: () => edit(newBlock('termin'), true) }, iconEl('plus', 20), 'Platzhalter'),
+      ),
+      tour.lunch.enabled
+        ? h('p', { class: 'muted small' }, `Die Mittagspause (${tour.lunch.minutes} min zwischen ${formatTime(tour.lunch.from)} und ${formatTime(tour.lunch.to)}) stellst du unter „Zeiten & Start“ ein.`)
+        : null,
+    );
   }
 
   function stopsCard() {
@@ -518,12 +588,15 @@ export function tourView(route: Route): View {
           return entryItem(e, num);
         }),
       ),
-      plan.dropped.length
+      plan.dropped.length || plan.droppedBlocks?.length
         ? h(
             'div',
             { class: 'dropped' },
             h('h3', { class: 'sheet-section' }, 'Nicht eingeplant'),
-            h('ul', { class: 'bullets' }, plan.dropped.map((d) => h('li', null, h('a', { href: `#/praxis/${d.practiceId}` }, store.getPractice(d.practiceId)?.name ?? 'Praxis'), ` – ${d.reason}`))),
+            h('ul', { class: 'bullets' },
+              plan.dropped.map((d) => h('li', null, h('a', { href: `#/praxis/${d.practiceId}` }, store.getPractice(d.practiceId)?.name ?? 'Praxis'), ` – ${d.reason}`)),
+              (plan.droppedBlocks ?? []).map((d) => h('li', null, h('b', null, d.title), ` – ${d.reason}`)),
+            ),
           )
         : null,
       h(
@@ -533,7 +606,7 @@ export function tourView(route: Route): View {
         isToday
           ? h('button', { class: 'btn', disabled: busy, onclick: () => { const n = new Date(); void calculate({ fromMinutes: Math.ceil((n.getHours() * 60 + n.getMinutes()) / 5) * 5 }); } }, iconEl('clock', 18), 'Ab jetzt neu planen')
           : null,
-        visits.length ? h('a', { class: 'btn', href: googleMapsUrl(plan, tour.returnHome), target: '_blank', rel: 'noopener' }, iconEl('route', 18), 'Ganze Route (Google Maps)') : null,
+        visits.length ? h('a', { class: 'btn', href: googleMapsUrl(plan), target: '_blank', rel: 'noopener' }, iconEl('route', 18), 'Ganze Route (Google Maps)') : null,
       ),
       h('p', { class: 'muted small' }, `Berechnet ${new Date(plan.computedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · inkl. ${store.settings.tourDefaults.trafficPercent} % Verkehrszuschlag. ${ROUTING_ATTRIBUTION} · `, h('a', { href: 'https://www.openstreetmap.org/fixthemap', target: '_blank', rel: 'noopener' }, 'Karte verbessern')),
     );
@@ -544,7 +617,7 @@ export function tourView(route: Route): View {
       case 'start':
         return h('li', { class: 'tl tl-point' }, h('span', { class: 'tl-time' }, formatTime(e.time)), h('span', { class: 'tl-body' }, iconEl('route', 18), h('b', null, `Abfahrt ${e.label}`)));
       case 'end':
-        return h('li', { class: 'tl tl-point' }, h('span', { class: 'tl-time' }, formatTime(e.time)), h('span', { class: 'tl-body' }, iconEl('check', 18), h('b', null, e.label === 'Zuhause' ? 'Ankunft zuhause' : 'Feierabend')));
+        return h('li', { class: 'tl tl-point' }, h('span', { class: 'tl-time' }, formatTime(e.time)), h('span', { class: 'tl-body' }, iconEl('check', 18), h('b', null, e.label === 'Zuhause' ? 'Ankunft zuhause' : e.label === 'Feierabend' ? 'Feierabend' : `Ankunft ${e.label}`)));
       case 'drive':
         return h(
           'li',
@@ -553,7 +626,15 @@ export function tourView(route: Route): View {
           h('span', { class: 'tl-body' }, e.km < 0.1 ? '🚶 gleich nebenan' : `🚗 ${Math.round(e.minutes)} min · ${String(e.km).replace('.', ',')} km`),
         );
       case 'break':
-        return h('li', { class: 'tl tl-break' }, h('span', { class: 'tl-time' }, formatTime(e.start)), h('span', { class: 'tl-body' }, `☕ Mittagspause bis ${formatTime(e.end)}`));
+        if (e.blockKind === 'termin') {
+          return h(
+            'li',
+            { class: 'tl tl-block' },
+            h('span', { class: 'tl-time' }, h('b', null, formatTime(e.start)), h('span', null, formatTime(e.end))),
+            h('div', { class: 'tl-body' }, h('div', { class: 'tl-title' }, `${blockIcon('termin')} ${e.title}`), h('div', { class: 'prow-sub' }, e.place ? `📍 ${e.place}` : 'ohne Ort – dort, wo du gerade bist')),
+          );
+        }
+        return h('li', { class: 'tl tl-break' }, h('span', { class: 'tl-time' }, formatTime(e.start)), h('span', { class: 'tl-body' }, `☕ ${e.title ?? 'Mittagspause'} bis ${formatTime(e.end)}`));
       case 'visit': {
         const p = store.getPractice(e.practiceId);
         if (!p) return null;
@@ -618,16 +699,17 @@ function statBox(value: string, label: string, kind?: string) {
 }
 
 /** Ganze Route für Google Maps (max. 9 Zwischenstopps). */
-function googleMapsUrl(plan: NonNullable<Tour['plan']>, returnHome: boolean): string {
+function googleMapsUrl(plan: NonNullable<Tour['plan']>): string {
   const pts = plan.entries
     .filter((e) => e.kind === 'visit')
     .map((e) => store.getPractice((e as { practiceId: string }).practiceId))
     .filter((p): p is Practice => !!p && p.lat !== undefined)
     .map((p) => `${p.lat},${p.lng}`);
   const origin = `${plan.startPoint.lat},${plan.startPoint.lng}`;
-  const home = store.settings.home ? `${store.settings.home.lat},${store.settings.home.lng}` : origin;
-  const destination = returnHome ? home : pts[pts.length - 1];
-  const waypoints = (returnHome ? pts : pts.slice(0, -1)).slice(0, 9);
+  // Ziel: zuhause / anderer Ort – oder die letzte Praxis
+  const end = plan.endPoint;
+  const destination = end ? `${end.lat},${end.lng}` : pts[pts.length - 1];
+  const waypoints = (end ? pts : pts.slice(0, -1)).slice(0, 9);
   const params = new URLSearchParams({ api: '1', origin, destination, travelmode: 'driving' });
   if (waypoints.length) params.set('waypoints', waypoints.join('|'));
   return `https://www.google.com/maps/dir/?${params}`;

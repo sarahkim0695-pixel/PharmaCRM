@@ -231,6 +231,12 @@ export function openVoicePlanner(opts: {
             ? `Mittagspause ${formatTime(l.from)}–${formatTime(l.to ?? l.from + (l.minutes ?? 45))}`
             : `Mittagspause ${l.minutes ?? 45} Min.`));
     }
+    for (const b of c.blocks) {
+      const when = b.from === undefined ? `${formatMinutes(b.minutes)}, irgendwann am Tag`
+        : b.to !== undefined && b.to - b.from === b.minutes ? `${formatTime(b.from)}–${formatTime(b.to)}`
+        : `${formatMinutes(b.minutes)} zwischen ${formatTime(b.from)} und ${formatTime(b.to ?? b.from + b.minutes)}`;
+      lines.push(item(b.kind === 'termin' ? '🎓' : '☕', h('b', null, b.title), ` – ${when}`));
+    }
     if (c.startMode) lines.push(item('🚗', c.startMode === 'here' ? 'Start am aktuellen Standort' : 'Start zuhause'));
     if (c.returnHome !== undefined) lines.push(item('🏠', c.returnHome ? 'Zum Schluss nach Hause' : 'Nicht nach Hause zurück'));
     for (const pl of c.unknownPlaces) lines.push(item('⚠️', `Keine Einträge in „${pl}“ gefunden`));
@@ -276,6 +282,7 @@ export function openVoicePlanner(opts: {
           h('li', null, h('b', null, 'Praxen: '), '„Dr. Huber um 10 Uhr fest, dauert eine Stunde“, „Praxis am Dom wenn es passt“, „ohne Dr. Lang“'),
           h('li', null, h('b', null, 'Auswahl: '), '„Rest auffüllen“, „nur fällige“, „nur Orthopäden“, „auch Hausärzte“, „nur Kunden in den Startlöchern“'),
           h('li', null, h('b', null, 'Zeiten: '), '„ab 7:30 los“, „bis 16 Uhr fertig“, „Mittagspause halb eins“, „ohne Mittagspause“, „maximal 6 Besuche“'),
+          h('li', null, h('b', null, 'Platzhalter & Pausen: '), '„Online-Schulung von 14 bis 15:30“, „Telefonkonferenz um 9, 30 Minuten“, „Kaffeepause 20 Minuten zwischen 15 und 17 Uhr“'),
           h('li', null, h('b', null, 'Packliste: '), '„Muster A für Dr. Huber mitnehmen“, „Visitenkarten einpacken“, „Notiz: Parkhaus nehmen“'),
           h('li', null, h('b', null, 'Sofort ausführen: '), 'am Ende „ausführen“ sagen.'),
         ),

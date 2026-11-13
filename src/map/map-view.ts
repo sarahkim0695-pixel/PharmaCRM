@@ -482,6 +482,14 @@ export class MapView {
       icon: L.divIcon({ className: 'tour-start', html: '<span>Start</span>', iconSize: [52, 26], iconAnchor: [26, 13] }),
       interactive: false,
     }).addTo(layer);
+    // Ziel, wenn es nicht der Start ist (z. B. Büro, Hotel)
+    const end = plan.endPoint;
+    if (end && (Math.abs(end.lat - plan.startPoint.lat) > 0.0005 || Math.abs(end.lng - plan.startPoint.lng) > 0.0005)) {
+      L.marker([end.lat, end.lng], {
+        icon: L.divIcon({ className: 'tour-start tour-end', html: '<span>Ziel</span>', iconSize: [52, 26], iconAnchor: [26, 13] }),
+        interactive: false,
+      }).addTo(layer);
+    }
     let n = 0;
     for (const e of plan.entries) {
       if (e.kind !== 'visit') continue;

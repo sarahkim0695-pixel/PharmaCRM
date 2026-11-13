@@ -9,6 +9,7 @@ import { dueInfo, stateKeyOf } from '../utils/customer';
 import { parseDate } from '../utils/dates';
 import { KIND_KEYS } from '../utils/kind';
 import { plural } from '../utils/text';
+import { newId } from '../utils/id';
 import { formatTime } from './opening-hours';
 import { addAppointments, newTour, planTour, PlanError, suggestPractices, tourKinds } from './planner';
 import type { LatLng } from './travel';
@@ -47,7 +48,16 @@ export async function applyVoiceCommand(
   if (cmd.dayEnd !== undefined) tour.dayEnd = cmd.dayEnd;
   if (cmd.maxVisits !== undefined) tour.maxVisits = cmd.maxVisits;
   if (cmd.startMode) tour.startMode = cmd.startMode;
-  if (cmd.returnHome !== undefined) tour.returnHome = cmd.returnHome;
+  if (cmd.returnHome !== undefined) {
+    tour.returnHome = cmd.returnHome;
+    tour.endMode = cmd.returnHome ? 'home' : 'last';
+  }
+  // Platzhalter und weitere Pausen
+  for (const b of cmd.blocks) {
+    const from = b.from ?? tour.dayStart;
+    const to = b.to ?? tour.dayEnd;
+    tour.blocks = [...(tour.blocks ?? []), { id: newId(), kind: b.kind, title: b.title, minutes: b.minutes, from, to: Math.max(to, from + b.minutes) }];
+  }
   if (cmd.lunch) {
     const l = cmd.lunch;
     tour.lunch = {

@@ -551,6 +551,44 @@ try {
   await page.locator('.stop-visit.longer').first().scrollIntoViewIfNeeded();
   await shot('28-laengerer-termin');
 
+  // 29. Anderer Start (Hotel), Ende beim letzten Termin, Platzhalter und flexible Pause
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  await page.locator('.details-card summary', { hasText: 'Zeiten & Start' }).click();
+  await page.getByRole('radiogroup', { name: 'Start' }).getByRole('radio', { name: 'Andere Adresse' }).click();
+  await page.fill('dialog input[placeholder^="z. B. Hotel"]', 'Hotel');
+  await page.fill('dialog input[autocomplete="street-address"]', 'Karlsplatz 1, 80335 München');
+  await page.locator('dialog').getByRole('button', { name: 'Suchen' }).click();
+  await page.waitForSelector('dialog .place-status:has-text("Gefunden")');
+  await shot('29a-startpunkt');
+  await page.locator('dialog').getByRole('button', { name: 'Übernehmen' }).click();
+  await page.waitForSelector('.place-line:has-text("Hotel")');
+  await page.getByRole('radiogroup', { name: 'Ziel' }).getByRole('radio', { name: 'Letzter Termin' }).click();
+  await page.waitForSelector('.details-card summary:has-text("Ende beim letzten Termin")');
+  // Platzhalter: Online-Schulung 14–15 Uhr (Vorgabe)
+  await page.getByRole('button', { name: 'Platzhalter', exact: true }).click();
+  await shot('29b-platzhalter');
+  await page.locator('dialog').getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('.block-item:has-text("Online-Schulung")');
+  // Kaffeepause 20 min, flexibel zwischen 15 und 17 Uhr
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('dialog .chip-toggle', { hasText: 'Kaffeepause' }).click();
+  await page.locator('dialog').getByRole('button', { name: 'Länger' }).click();
+  await page.locator('dialog').getByRole('button', { name: 'Speichern' }).click();
+  await page.waitForSelector('.block-item:has-text("Kaffeepause")');
+  assert.match(await page.locator('.block-item', { hasText: 'Kaffeepause' }).innerText(), /20 min zwischen 15:00 und 17:00/);
+  assert.match(await page.locator('.block-item', { hasText: 'Online-Schulung' }).innerText(), /14:00–15:00 · ohne Ort/);
+  await shot('29c-pausen-platzhalter');
+  await page.getByRole('button', { name: /Tour berechnen|Neu berechnen/ }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  const tl = await page.locator('.timeline').innerText();
+  assert.match(tl, /Abfahrt Hotel/);
+  assert.match(tl, /14:00\s*15:00\s*🎓 Online-Schulung/);
+  assert.match(tl, /☕ Kaffeepause bis/);
+  assert.match(tl, /Feierabend/);
+  assert.doesNotMatch(tl, /Ankunft zuhause/);
+  await page.locator('.tl-block').first().scrollIntoViewIfNeeded();
+  await shot('29d-zeitplan');
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } catch (err) {

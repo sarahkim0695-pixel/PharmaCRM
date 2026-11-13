@@ -204,6 +204,16 @@ Die Veranstaltung erscheint sofort bei **allen** Praxen und Kliniken. In der Pra
    - Sie fährt so spät los, dass du morgens nicht vor verschlossener Tür wartest.
    - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
+   **Start und Ziel** wählst du je Tour unter **Zeiten & Start**:
+   - Start: **Zuhause**, **Mein Standort** oder **Andere Adresse** (z. B. Hotel, Büro).
+   - Ziel: **Zuhause**, **Letzter Termin** (keine Rückfahrt) oder **Andere Adresse**.
+   - Für eine andere Adresse gibst du eine Bezeichnung und die Adresse ein und tippst auf „Suchen“. Zuletzt benutzte Orte stehen oben zum schnellen Antippen.
+   **Pausen & Platzhalter** (eigene Karte unter „Zeiten & Start“): Zusätzlich zur Mittagspause kannst du weitere Blöcke einplanen.
+   - **+ Pause** – z. B. Kaffeepause.
+   - **+ Platzhalter** – z. B. Online-Schulung, Telefonkonferenz, Büro.
+   - Bei beiden stellst du die Dauer mit −/+ ein und wählst die Zeit **fest** (z. B. 14:00–15:30) oder **flexibel** (z. B. 20 min irgendwann zwischen 15 und 17 Uhr). Bei flexibler Zeit legt die App den Block dorthin, wo er am besten passt.
+   - Platzhalter ohne Ort (online) finden dort statt, wo du gerade bist. Mit Ort (Zuhause oder Adresse) plant die App die Fahrt dorthin ein.
+   - Passt ein Block nicht in den Tag, steht er unter „Nicht eingeplant“.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
    **Längerer Termin?** In der Zeile **⏱ Vor Ort** bei der Praxis mit **+** die Dauer erhöhen (bzw. mit **−** verkürzen) – 5 Minuten bis 4 Stunden. Das gilt **nur für diesen Tag**; der normale Zeitaufwand der Praxis bleibt. „Standard (… min)“ setzt zurück. Danach **Neu berechnen** – im Zeitplan steht dann „länger eingeplant“.
 5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, Praxen in den Startlöchern und bestellende Kunden zuerst – und rechnet sie gleich durch.
@@ -234,6 +244,7 @@ Beispiele:
 | Zeiten | „ab 7:30 los“, „bis 16 Uhr fertig“, „um 17 Uhr zuhause“, „maximal 6 Besuche“, „halb neun“, „viertel nach acht“, „dreiviertel neun“ |
 | Mittagspause | „Mittagspause halb eins“, „Mittagspause von 12:30 bis 13:15“, „zwischen 12 und 14 Uhr, 30 Minuten“, „ohne Mittagspause“ |
 | Start / Ende | „von hier aus starten“, „nicht nach Hause zurück“, „neu anfangen“ |
+| Platzhalter & Pausen | „Online-Schulung von 14 bis 15:30“, „Telefonkonferenz um 9, 30 Minuten“, „nachmittags eine Stunde Büro“, „Kaffeepause 20 Minuten zwischen 15 und 17 Uhr“ |
 | Packliste / Notiz | „… für Dr. Huber mitnehmen“, „… einpacken“, „Notiz: …“ |
 | Sofort ausführen | am Ende „ausführen“ sagen |
 
@@ -318,6 +329,8 @@ src/
   tour/voice.ts           Sprachsteuerung: deutsche Sätze → Anweisungen (Datum, Ort, Praxen, Zeiten …)
   tour/voice-apply.ts     Sprachsteuerung: Anweisungen auf die Tour anwenden und berechnen
   views/voice-sheet.ts    Sprachsteuerung: Mikrofon (Web Speech API), Vorschau, Ausführen
+  views/place-picker.ts   Ort wählen (Start/Ziel/Platzhalter): Adresssuche, Standort, zuletzt benutzt
+  views/block-editor.ts   Pausen & Platzhalter (fest oder flexibel, mit/ohne Ort) bearbeiten
   geo/osm.ts              Overpass-Antwort → GeoJSON (Ringe zusammensetzen, nur Deutschland)
   map/map-view.ts         Karte: Gebiet, Pins, Bedienelemente, Gebiet bearbeiten, Pin setzen
   map/popup.ts            Kurzinfo beim Antippen eines Pins
@@ -331,7 +344,7 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen, Gruppen, Sprache)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen, Gruppen, Sprache, Start/Ziel, Platzhalter)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 
