@@ -128,6 +128,10 @@ export function mergeRecords(keep: Practice, others: Practice[]): Practice {
       const cur = m.products[id];
       if (!cur || rank[st] > rank[cur]) m.products[id] = st;
     }
+    for (const [id, st] of Object.entries(o.events ?? {})) {
+      m.events = { ...(m.events ?? {}) };
+      if (!m.events[id] || st === 'interesse') m.events[id] = st;
+    }
     if (o.hint) hints.add(o.hint);
     m.specialty ||= o.specialty;
     m.phone ||= o.phone;

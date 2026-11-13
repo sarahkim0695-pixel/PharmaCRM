@@ -22,6 +22,7 @@ import { productsSection, productsView } from './views/products-view';
 import { backupView, startBackupReminder } from './views/backup-view';
 import { tourView } from './views/tour-view';
 import { duplicatesView } from './views/duplicates-view';
+import { eventsSection, eventsView } from './views/events-view';
 
 /** Seiten-Fabriken je Route. Neue Seiten hier eintragen. */
 const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
@@ -41,6 +42,7 @@ const PAGES: Partial<Record<RouteName, (r: Route) => View>> = {
   backup: backupView,
   tour: tourView,
   duplicates: duplicatesView,
+  events: eventsView,
 };
 
 /** Abschnitte der Praxis-Detailansicht (Reihenfolge = Anzeige). */
@@ -49,6 +51,7 @@ registerDetailSection(hoursSection);
 registerDetailSection(appointmentSection);
 registerDetailSection(visitsSection);
 registerDetailSection(productsSection);
+registerDetailSection(eventsSection);
 
 /** Weitere Seiten (Besuche, Produkte, Backup) melden sich hier an. */
 export function registerPage(name: RouteName, factory: (r: Route) => View): void {
@@ -79,6 +82,7 @@ const TAB_OF: Record<RouteName, Tab> = {
   settings: 'more',
   help: 'more',
   duplicates: 'more',
+  events: 'more',
 };
 
 /** Banner-Bereich oben (z. B. Backup-Erinnerung) */

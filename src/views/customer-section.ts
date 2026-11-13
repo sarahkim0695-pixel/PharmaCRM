@@ -57,11 +57,13 @@ export function customerSection(p: Practice): HTMLElement {
         ),
       ),
     ),
-    p.status && (fromExcel || p.customerState)
-      ? h('p', { class: 'muted small' }, `Laut Excel: „${p.status}“${p.customerState ? ' – in der App geändert' : ''}`)
-      : p.status && !fromExcel
-        ? h('p', { class: 'muted small' }, `Laut Excel: „${p.status}“ – bitte Status antippen.`)
-        : null,
+    p.customerState
+      ? p.status
+        ? h('p', { class: 'muted small' }, `Laut Excel: „${p.status}“ – in der App geändert`)
+        : null
+      : fromExcel
+        ? h('p', { class: 'muted small' }, `Aus der Excel: „${p.status}“`)
+        : h('p', { class: 'muted small' }, p.status ? `Excel-Status „${p.status}“ unbekannt – als „Nicht in Kontakt“ eingestuft. Bitte prüfen.` : 'Noch kein Status – als „Nicht in Kontakt“ eingestuft.'),
     h('h3', { class: 'sheet-section' }, 'Besuchen alle …'),
     h(
       'div',

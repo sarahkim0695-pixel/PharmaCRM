@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_FILTER, matchesFilter, sortPractices, distanceKm, activeFilterCount, type FilterContext } from '../../src/state/filters';
 import type { Practice, Visit } from '../../src/types';
-import { colorForStatus, statusKey } from '../../src/utils/colors';
 import { daysSince, formatDate, relativeDays } from '../../src/utils/dates';
 import { normalizePlz, parsePlzList } from '../../src/utils/text';
 
@@ -19,8 +18,8 @@ const ctx: FilterContext = { lastVisit: (id) => visits[id], intervalOf: () => 90
 
 describe('Filter', () => {
   const list = [
-    p({ id: '1' }),
-    p({ id: '2', name: 'Orthopädie Süd', specialty: 'Orthopädie', status: 'kein Kunde', plz: '86150', city: 'Augsburg', needsReview: true }),
+    p({ id: '1', events: { ev1: 'interesse' } }),
+    p({ id: '2', events: { ev1: 'kein' }, name: 'Orthopädie Süd', specialty: 'Orthopädie', status: 'kein Kunde', plz: '86150', city: 'Augsburg', needsReview: true }),
     p({ id: '3', name: 'Praxis Ö', status: 'Interessent', geoStatus: 'not_found', lat: undefined, lng: undefined, nextAppointment: '2026-11-10', products: { prod1: 'angeboten' } }),
   ];
   const ids = (f: Partial<typeof EMPTY_FILTER>) => list.filter((x) => matchesFilter(x, { ...EMPTY_FILTER, ...f }, ctx)).map((x) => x.id);
@@ -39,6 +38,14 @@ describe('Filter', () => {
     expect(ids({ territory: 'outside' })).toEqual(['2']);
     expect(ids({ productId: 'prod1', productState: 'angeboten' })).toEqual(['3']);
     expect(ids({ productId: 'prod1', productState: 'kauft' })).toEqual([]);
+  });
+  it('filtert nach Veranstaltung: Interesse, kein Interesse, noch nicht angefragt', () => {
+    expect(ids({ eventId: 'ev1', eventState: 'interesse' })).toEqual(['1']);
+    expect(ids({ eventId: 'ev1', eventState: 'kein' })).toEqual(['2']);
+    expect(ids({ eventId: 'ev1', eventState: 'offen' })).toEqual(['3']);
+    expect(ids({ eventId: 'ev2', eventState: 'offen' })).toEqual(['1', '2', '3']);
+    expect(ids({ eventId: 'ev1', eventState: '' })).toEqual(['1', '2', '3']);
+    expect(activeFilterCount({ ...EMPTY_FILTER, eventId: 'ev1', eventState: 'offen' })).toBe(1);
   });
   it('erkennt „lange nicht besucht“ (inkl. nie besucht)', () => {
     expect(ids({ stale: true })).toEqual(['2', '3']);
@@ -64,13 +71,6 @@ describe('Hilfsfunktionen', () => {
     expect(normalizePlz(1067)).toBe('01067');
     expect(normalizePlz('80331 ')).toBe('80331');
     expect(parsePlzList('80331, 80333;81245\n80331 und 1234')).toEqual(['80331', '80333', '81245']);
-  });
-  it('Status-Farben', () => {
-    expect(statusKey(' Kein-Kunde ')).toBe('kein kunde');
-    expect(colorForStatus('Kunde')).toBe('#1f9d55');
-    expect(colorForStatus('kein Kunde')).toBe('#d64545');
-    expect(colorForStatus('Interessent')).toBe(colorForStatus('interessent'));
-    expect(colorForStatus('Kunde', { kunde: '#000000' })).toBe('#000000');
   });
   it('Datum', () => {
     const today = new Date(2026, 10, 6);

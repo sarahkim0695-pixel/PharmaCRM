@@ -55,7 +55,7 @@ describe('Vorschläge', () => {
     const ids = suggestPractices(tour).map((s) => s.practice.id);
     expect(ids).toContain('ergolding');
     expect(ids).not.toContain('muc');
-    expect(suggestPractices(tour)[0].why).toMatch(/Aktiver Kunde · noch nie besucht/);
+    expect(suggestPractices(tour)[0].why).toMatch(/Bestellender Kunde · noch nie besucht/);
   });
 
   it('feste Praxis: ergänzt Besuche auf der Strecke und in der Nähe, nicht weit ab', async () => {

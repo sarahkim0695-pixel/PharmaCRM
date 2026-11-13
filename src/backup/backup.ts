@@ -75,6 +75,7 @@ export function parseBackup(text: string): BackupFile {
     settings: (data.settings ?? {}) as Settings,
     extraPlzShapes: Array.isArray(data.extraPlzShapes) ? data.extraPlzShapes : [],
     tours: Array.isArray(data.tours) ? data.tours : [],
+    events: Array.isArray(data.events) ? data.events : [],
   };
 }
 

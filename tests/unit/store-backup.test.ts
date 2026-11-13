@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { backupReminder, parseBackup } from '../../src/backup/backup';
 import { resetDbConnection } from '../../src/db/database';
-import { DEFAULT_SETTINGS, store } from '../../src/state/store';
+import { DEFAULT_SETTINGS, store, withDefaults } from '../../src/state/store';
 import type { Practice, Settings } from '../../src/types';
 
 const practice = (id: string, extra: Partial<Practice> = {}): Practice => ({
@@ -61,11 +61,63 @@ describe('Datenspeicher (IndexedDB)', () => {
     expect(store.settings.lastBackupAt).toBeTruthy();
   });
 
+  it('Veranstaltungen: gelten für alle Praxen, Löschen entfernt die Angaben, Backup enthält sie', async () => {
+    const ev = { id: 'e1', name: 'Wundforum', date: '2026-12-03', place: 'Augsburg', note: '', archived: false, createdAt: '', updatedAt: '' };
+    await store.saveEvent(ev);
+    await store.saveEvent({ ...ev, id: 'e2', name: 'Alt', archived: true });
+    await store.savePractices([practice('a', { events: { e1: 'interesse' } }), practice('b', { events: { e1: 'kein', e2: 'interesse' } })]);
+    expect(store.eventList().map((e) => e.id)).toEqual(['e1']);
+    expect(store.eventList(true).map((e) => e.name)).toEqual(['Alt', 'Wundforum']); // Datum, dann Name
+
+    const json = JSON.stringify(store.toBackup());
+    await store.clearAll();
+    expect(store.events.size).toBe(0);
+    await store.restoreBackup(parseBackup(json));
+    expect(store.events.get('e1')?.place).toBe('Augsburg');
+    expect(store.getPractice('b')?.events).toEqual({ e1: 'kein', e2: 'interesse' });
+
+    await resetDbConnection();
+    await store.load();
+    expect(store.events.size).toBe(2);
+
+    await store.deleteEvent('e1');
+    expect(store.events.has('e1')).toBe(false);
+    expect(store.getPractice('a')?.events).toEqual({});
+    expect(store.getPractice('b')?.events).toEqual({ e2: 'interesse' });
+  });
+
+  it('ältere Backups ohne Veranstaltungen lassen sich weiter einlesen', () => {
+    const b = parseBackup(JSON.stringify({ app: 'RepMap', formatVersion: 1, practices: [], visits: [], products: [] }));
+    expect(b.events).toEqual([]);
+  });
+
   it('lehnt fremde oder kaputte Dateien verständlich ab', () => {
     expect(() => parseBackup('kein json')).toThrow(/kein JSON/);
     expect(() => parseBackup('{"app":"Excel"}')).toThrow(/keine RepMap-Backup-Datei/);
     expect(() => parseBackup('{"app":"RepMap","formatVersion":2}')).toThrow(/neueren RepMap-Version/);
     expect(() => parseBackup('{"app":"RepMap","formatVersion":1,"practices":[]}')).toThrow(/unvollständig/);
+  });
+});
+
+describe('Standard-Besuchsintervall', () => {
+  it('ist für jeden Kundenstatus alle 3 Monate', () => {
+    expect(withDefaults(undefined).intervalDefaults).toEqual({ aktiv: 91, prozess: 91, kein: 91 });
+  });
+  it('stellt ältere gespeicherte Standardwerte einmalig auf 3 Monate um', () => {
+    const old = { backupReminderDays: 7, intervalDefaults: { aktiv: 28, prozess: 14, kein: 90 } } as Partial<Settings>;
+    const s = withDefaults(old);
+    expect(s.intervalDefaults).toEqual({ aktiv: 91, prozess: 91, kein: 91 });
+    expect(s.backupReminderDays).toBe(7);
+  });
+  it('behält danach selbst geänderte Standardwerte', () => {
+    const mine = withDefaults({ ...withDefaults(undefined), intervalDefaults: { aktiv: 28, prozess: 91, kein: 182 } });
+    expect(withDefaults(mine).intervalDefaults).toEqual({ aktiv: 28, prozess: 91, kein: 182 });
+  });
+  it('eigenes Intervall einer Praxis bleibt unberührt', async () => {
+    await store.savePractices([practice('a', { visitIntervalDays: 14 }), practice('b')]);
+    const { intervalOf } = await import('../../src/utils/customer');
+    expect(intervalOf(store.getPractice('a')!, store.settings)).toBe(14);
+    expect(intervalOf(store.getPractice('b')!, store.settings)).toBe(91);
   });
 });
 

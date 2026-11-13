@@ -1,7 +1,7 @@
 /**
  * Filter und Sortierung für Liste UND Karte (beide zeigen dieselbe Auswahl).
  */
-import type { FacilityKind, Practice, ProductState, Visit } from '../types';
+import type { EventInterest, FacilityKind, Practice, ProductState, Visit } from '../types';
 import { kindOf } from '../utils/kind';
 import { STATE_KEYS, stateKeyOf, type StateKey } from '../utils/customer';
 import { daysSince } from '../utils/dates';
@@ -21,6 +21,9 @@ export interface PracticeFilter {
   territory: 'all' | 'inside' | 'outside';
   productId: string;
   productState: '' | ProductState | 'any';
+  eventId: string;
+  /** offen = noch nicht angefragt */
+  eventState: '' | EventInterest | 'offen';
 }
 
 export type SortKey =
@@ -58,6 +61,8 @@ export const EMPTY_FILTER: PracticeFilter = {
   territory: 'all',
   productId: '',
   productState: '',
+  eventId: '',
+  eventState: '',
 };
 
 export interface FilterContext {
@@ -81,7 +86,8 @@ export function activeFilterCount(f: PracticeFilter): number {
     (f.stale ? 1 : 0) +
     (f.hasAppointment ? 1 : 0) +
     (f.territory !== 'all' ? 1 : 0) +
-    (f.productId && f.productState ? 1 : 0)
+    (f.productId && f.productState ? 1 : 0) +
+    (f.eventId && f.eventState ? 1 : 0)
   );
 }
 
@@ -111,6 +117,10 @@ export function matchesFilter(p: Practice, f: PracticeFilter, ctx: FilterContext
   if (f.territory !== 'all') {
     const inside = ctx.territory.has(p.plz);
     if (f.territory === 'inside' ? !inside : inside) return false;
+  }
+  if (f.eventId && f.eventState) {
+    const st = p.events?.[f.eventId];
+    if (f.eventState === 'offen' ? st : st !== f.eventState) return false;
   }
   if (f.productId && f.productState) {
     const st = p.products?.[f.productId];

@@ -31,7 +31,8 @@ export type RouteName =
   | 'settings'
   | 'help'
   | 'tour'
-  | 'duplicates';
+  | 'duplicates'
+  | 'events';
 
 const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/karte\/?$/, 'map', []],
@@ -54,6 +55,7 @@ const ROUTES: [RegExp, RouteName, string[]][] = [
   [/^\/einstellungen$/, 'settings', []],
   [/^\/hilfe$/, 'help', []],
   [/^\/doppelte$/, 'duplicates', []],
+  [/^\/veranstaltungen$/, 'events', []],
   [/^\/tour$/, 'tour', []],
   [/^\/tour\/(\d{4}-\d{2}-\d{2})$/, 'tour', ['date']],
 ];

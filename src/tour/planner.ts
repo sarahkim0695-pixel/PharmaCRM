@@ -123,7 +123,7 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
         park: dur.park,
         visit: dur.visit,
         must: s.must || appt !== undefined,
-        // wichtigere (fällige, aktive, im Gespräch) bleiben drin, wenn nicht alles passt
+        // wichtigere (fällige, bestellende, Startlöcher) bleiben drin, wenn nicht alles passt
         weight: 1 + Math.min(visitPriority(p, date), 4) / 4,
       },
     });
@@ -218,11 +218,11 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
 /**
  * Wie dringend ist ein Besuch? (höher = wichtiger)
  * Fälligkeit laut Besuchsintervall (Tage seit Besuch ÷ Intervall, max. 3) plus Bonus je Kundenstatus:
- * im Gespräch > aktiver Kunde > Status offen > kein Kunde.
+ * in den Startlöchern > bestellender Kunde > nicht in Kontakt.
  */
 export function visitPriority(p: Practice, onDate: Date = new Date()): number {
   const due = dueInfo(p, store.lastVisit(p.id)?.date, store.settings, onDate);
-  const bonus: Record<StateKey, number> = { prozess: 1.3, aktiv: 1, offen: 0.4, kein: 0.1 };
+  const bonus: Record<StateKey, number> = { prozess: 1.3, aktiv: 1, kein: 0.2 };
   return (due.never ? 1.2 : Math.min(due.ratio, 3)) + bonus[stateKeyOf(p)];
 }
 

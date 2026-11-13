@@ -291,9 +291,9 @@ try {
   await shot('16-detail-oeffnungszeiten');
 
   // 14b. Kundenstatus und Besuchsintervall setzen
-  assert.match(await page.locator('.state-btn.on').innerText(), /Aktiver Kunde/); // aus „Kunde“ in der Excel
-  await page.locator('.state-btn', { hasText: 'Im Gespräch' }).click();
-  await page.waitForSelector('.state-btn.on:has-text("Im Gespräch")');
+  assert.match(await page.locator('.state-btn.on').innerText(), /Bestellender Kunde/); // aus „Kunde“ in der Excel
+  await page.locator('.state-btn', { hasText: 'In den Startlöchern' }).click();
+  await page.waitForSelector('.state-btn.on:has-text("In den Startlöchern")');
   await page.getByRole('button', { name: '6 Wochen', exact: true }).click();
   await page.waitForSelector('.chip-toggle.on:has-text("6 Wochen")');
   assert.match(await page.locator('.due-line').innerText(), /noch nie besucht/);
@@ -379,7 +379,7 @@ try {
   await page.getByRole('button', { name: 'Tour vorschlagen' }).click();
   await page.waitForSelector('.timeline', { timeout: 30_000 });
   assert.ok((await page.locator('.tl-visit').count()) >= 1, 'keine Besuche vorgeschlagen');
-  assert.match(await page.locator('.stop-why').first().innerText(), /Kunde|Gespräch|Status/);
+  assert.match(await page.locator('.stop-why').first().innerText(), /Kunde|Startlöchern|Kontakt/);
   // Mitbringen + Tagesnotiz → Packliste
   await page.locator('.bring-input').first().fill('Katalog, Muster A');
   await page.locator('.bring-input').first().blur();
@@ -397,6 +397,54 @@ try {
   await page.getByRole('button', { name: 'Passende Besuche ergänzen' }).click();
   // In den Beispieldaten liegt evtl. nichts Passendes mehr in der Nähe – dann kommt ein Hinweis
   await page.waitForSelector('.timeline, .toast:has-text("Keine passenden")', { timeout: 30_000 });
+
+  // 23. Veranstaltung anlegen → gilt für alle Praxen
+  await page.goto(`${BASE}#/mehr`);
+  await page.waitForSelector('a[href="#/veranstaltungen"]');
+  await page.goto(`${BASE}#/veranstaltungen`);
+  await page.waitForSelector('text=Noch keine Veranstaltungen');
+  await page.fill('input[placeholder^="z. B. Wundforum"]', 'Wundforum Augsburg');
+  await page.fill('form input[type=date]', wednesday);
+  await page.fill('form input[placeholder="optional"]', 'Augsburg');
+  await page.getByRole('button', { name: 'Veranstaltung anlegen' }).click();
+  await page.waitForSelector('.prow-title:has-text("Wundforum Augsburg")');
+  assert.match(await page.locator('.prow', { hasText: 'Wundforum' }).innerText(), /noch nicht angefragt: 12/);
+  // bei einer Praxis „Interesse“ einstellen
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', 'Testpraxis');
+  await page.waitForTimeout(400);
+  await page.locator('.prow', { hasText: 'Testpraxis Neu' }).click();
+  await page.locator('[aria-label="Wundforum Augsburg"] .seg-ev-interesse').click();
+  await page.waitForSelector('[aria-label="Wundforum Augsburg"] .seg-ev-interesse.on');
+  await shot('23-detail-veranstaltung');
+  await page.goto(`${BASE}#/veranstaltungen`);
+  assert.match(await page.locator('.prow', { hasText: 'Wundforum' }).innerText(), /Interesse: 1[\s\S]*noch nicht angefragt: 11/);
+  if (shots) await page.waitForSelector('.toast', { state: 'detached', timeout: 8000 }).catch(() => {});
+  await shot('23-veranstaltungen');
+  // „noch nicht angefragt“ als Liste anzeigen
+  await page.locator('.prow', { hasText: 'Wundforum' }).click();
+  await page.locator('dialog').getByRole('button', { name: /noch nicht angefragt \(11\)/ }).click();
+  await page.waitForSelector('.chip:has-text("Wundforum Augsburg: noch nicht angefragt")');
+  assert.equal(await page.locator('.prow').count(), 11);
+  assert.equal(await page.locator('.prow', { hasText: 'Testpraxis Neu' }).count(), 0);
+
+  // 24. Mehrere bearbeiten: Status + Intervall für alle angezeigten
+  await page.getByRole('button', { name: 'Mehrere bearbeiten' }).click();
+  await page.locator('dialog .chip-toggle', { hasText: 'In den Startlöchern' }).click();
+  await page.locator('dialog select').selectOption('21');
+  await shot('24-mehrere-bearbeiten');
+  await page.locator('dialog').getByRole('button', { name: 'Übernehmen' }).click();
+  await page.locator('dialog', { hasText: '11 Einträge werden geändert' }).getByRole('button', { name: 'Übernehmen' }).click();
+  await page.waitForSelector('.toast:has-text("11 Einträge geändert")');
+  await page.locator('.prow').first().click();
+  await page.waitForSelector('.state-btn.on:has-text("In den Startlöchern")');
+  await page.waitForSelector('.chip-toggle.on:has-text("3 Wochen")');
+
+  // 25. Tour: Hinweis „Noch anfragen“ bei Besuchen vor der Veranstaltung
+  await page.goto(`${BASE}#/tour/${wednesday}`);
+  await page.waitForSelector('.tl-ask:has-text("Wundforum Augsburg")', { timeout: 30_000 });
+  await page.locator('.tl-ask').first().scrollIntoViewIfNeeded();
+  await shot('25-tour-anfragen');
 
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');

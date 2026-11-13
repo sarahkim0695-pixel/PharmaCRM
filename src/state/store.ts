@@ -7,11 +7,12 @@
  */
 import { getDb } from '../db/database';
 import { DEFAULT_TERRITORY_PLZ } from '../data/territory';
-import type { BackupFile, PlzFeature, Practice, Product, Settings, Tour, TourDefaults, Visit } from '../types';
+import type { BackupFile, EventItem, PlzFeature, Practice, Product, Settings, Tour, TourDefaults, Visit } from '../types';
+import { DEFAULT_INTERVALS } from '../utils/customer';
 import { nowIso } from '../utils/id';
 import { mergeRecords } from './duplicates';
 
-export type ChangeKind = 'practices' | 'visits' | 'products' | 'settings' | 'shapes' | 'territory' | 'tours';
+export type ChangeKind = 'practices' | 'visits' | 'products' | 'settings' | 'shapes' | 'territory' | 'tours' | 'events';
 type Listener = (kinds: Set<ChangeKind>) => void;
 
 export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
@@ -28,6 +29,13 @@ export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
   maxVisits: 10,
 };
 
+/**
+ * Wird erhöht, wenn sich die Standard-Intervalle ändern sollen – auch bei
+ * schon gespeicherten Einstellungen (einmalig beim nächsten Start).
+ * 2 = alle 3 Monate (vorher 4 Wochen / 2 Wochen / 3 Monate).
+ */
+export const INTERVAL_DEFAULTS_VERSION = 2;
+
 export const DEFAULT_SETTINGS: Settings = {
   territoryPlz: [...DEFAULT_TERRITORY_PLZ],
   statusColors: {},
@@ -35,7 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backupReminderDays: 7,
   tourDefaults: { ...DEFAULT_TOUR_SETTINGS },
   // Standard-Besuchsintervall in Tagen je Kundenstatus
-  intervalDefaults: { aktiv: 28, prozess: 14, kein: 90, offen: 60 },
+  intervalDefaults: { ...DEFAULT_INTERVALS },
+  intervalDefaultsVersion: INTERVAL_DEFAULTS_VERSION,
 };
 
 /** Gespeicherte Einstellungen mit Standardwerten ergänzen (auch für neue Felder). */
@@ -45,7 +54,12 @@ export function withDefaults(saved: Partial<Settings> | undefined): Settings {
     ...base,
     ...(saved ?? {}),
     tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) },
-    intervalDefaults: { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+    // ältere Einstellungen: einmalig auf die neuen Standard-Intervalle umstellen
+    intervalDefaults:
+      (saved?.intervalDefaultsVersion ?? 0) < INTERVAL_DEFAULTS_VERSION
+        ? base.intervalDefaults
+        : { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+    intervalDefaultsVersion: INTERVAL_DEFAULTS_VERSION,
   };
 }
 
@@ -55,6 +69,7 @@ class Store {
   products = new Map<string, Product>();
   extraShapes = new Map<string, PlzFeature>();
   tours = new Map<string, Tour>();
+  events = new Map<string, EventItem>();
   settings: Settings = structuredClone(DEFAULT_SETTINGS);
   loaded = false;
 
@@ -66,12 +81,13 @@ class Store {
 
   async load(): Promise<void> {
     const db = await getDb();
-    const [practices, visits, products, shapes, tours, settings] = await Promise.all([
+    const [practices, visits, products, shapes, tours, events, settings] = await Promise.all([
       db.getAll('practices'),
       db.getAll('visits'),
       db.getAll('products'),
       db.getAll('plzShapes'),
       db.getAll('tours'),
+      db.getAll('events'),
       db.get('meta', 'settings') as Promise<Partial<Settings> | undefined>,
     ]);
     this.practices = new Map(practices.map((p) => [p.id, p]));
@@ -79,10 +95,11 @@ class Store {
     this.products = new Map(products.map((p) => [p.id, p]));
     this.extraShapes = new Map(shapes.map((s) => [s.properties.plz, s]));
     this.tours = new Map(tours.map((t) => [t.id, t]));
+    this.events = new Map(events.map((e) => [e.id, e]));
     this.settings = withDefaults(settings);
     this.lastVisitCache = null;
     this.loaded = true;
-    this.emit('practices', 'visits', 'products', 'settings', 'shapes', 'territory', 'tours');
+    this.emit('practices', 'visits', 'products', 'settings', 'shapes', 'territory', 'tours', 'events');
   }
 
   subscribe(fn: Listener): () => void {
@@ -304,6 +321,40 @@ class Store {
     this.emit('shapes');
   }
 
+  // ---------- Veranstaltungen ----------
+
+  /** Veranstaltungen nach Datum (ohne Datum zuletzt) */
+  eventList(includeArchived = false): EventItem[] {
+    return [...this.events.values()]
+      .filter((e) => includeArchived || !e.archived)
+      .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.name.localeCompare(b.name, 'de'));
+  }
+
+  async saveEvent(e: EventItem): Promise<EventItem> {
+    const saved = { ...e, updatedAt: nowIso() };
+    this.events.set(saved.id, saved);
+    await (await getDb()).put('events', saved);
+    await this.touch();
+    this.emit('events');
+    return saved;
+  }
+
+  /** Löscht eine Veranstaltung und die Angaben dazu bei allen Praxen. */
+  async deleteEvent(id: string): Promise<void> {
+    const affected = this.practiceList()
+      .filter((p) => p.events?.[id])
+      .map((p) => {
+        const events = { ...p.events };
+        delete events[id];
+        return { ...p, events };
+      });
+    this.events.delete(id);
+    await (await getDb()).delete('events', id);
+    if (affected.length) await this.savePractices(affected);
+    await this.touch();
+    this.emit('events');
+  }
+
   // ---------- Touren ----------
 
   async saveTour(t: Tour): Promise<Tour> {
@@ -335,14 +386,16 @@ class Store {
       settings: this.settings,
       extraPlzShapes: [...this.extraShapes.values()],
       tours: [...this.tours.values()],
+      events: [...this.events.values()],
     };
   }
 
   /** Ersetzt ALLE Daten durch den Inhalt einer Backup-Datei. */
   async restoreBackup(b: BackupFile): Promise<void> {
     const db = await getDb();
-    const tx = db.transaction(['practices', 'visits', 'products', 'meta', 'plzShapes', 'tours'], 'readwrite');
+    const tx = db.transaction(['practices', 'visits', 'products', 'meta', 'plzShapes', 'tours', 'events'], 'readwrite');
     await Promise.all([
+      tx.objectStore('events').clear(),
       tx.objectStore('practices').clear(),
       tx.objectStore('visits').clear(),
       tx.objectStore('products').clear(),
@@ -360,6 +413,7 @@ class Store {
       ...b.products.map((p) => tx.objectStore('products').put(p)),
       ...(b.extraPlzShapes ?? []).map((s) => tx.objectStore('plzShapes').put(s)),
       ...(b.tours ?? []).map((t) => tx.objectStore('tours').put(t)),
+      ...(b.events ?? []).map((e) => tx.objectStore('events').put(e)),
       tx.objectStore('meta').put(settings, 'settings'),
       tx.done,
     ]);
@@ -370,7 +424,7 @@ class Store {
   async clearAll(): Promise<void> {
     const db = await getDb();
     const tx = db.transaction(
-      ['practices', 'visits', 'products', 'meta', 'plzShapes', 'geocodeCache', 'tours'],
+      ['practices', 'visits', 'products', 'meta', 'plzShapes', 'geocodeCache', 'tours', 'events'],
       'readwrite',
     );
     await Promise.all([
@@ -381,6 +435,7 @@ class Store {
       tx.objectStore('plzShapes').clear(),
       tx.objectStore('geocodeCache').clear(),
       tx.objectStore('tours').clear(),
+      tx.objectStore('events').clear(),
       tx.done,
     ]);
     await this.load();

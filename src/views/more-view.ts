@@ -36,6 +36,7 @@ export function moreView(): View {
           return menuItem({ icon: 'layers', label: 'Doppelte Standorte', sub: dups ? `${plural(dups, 'Fall', 'Fälle')} zu prüfen` : 'keine gefunden', href: '#/doppelte' });
         })(),
         menuItem({ icon: 'area', label: 'Mein Gebiet', sub: plural(store.settings.territoryPlz.length, 'PLZ', 'PLZ'), href: '#/gebiet' }),
+        menuItem({ icon: 'calendar', label: 'Veranstaltungen', sub: plural(store.eventList().length, 'Veranstaltung', 'Veranstaltungen'), href: '#/veranstaltungen' }),
         menuItem({ icon: 'box', label: 'Produkte', sub: plural(store.productList().length, 'Produkt', 'Produkte'), href: '#/produkte' }),
         menuItem({
           icon: 'shield',

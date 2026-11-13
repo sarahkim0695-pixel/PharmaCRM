@@ -4,11 +4,12 @@ import { activeFilterCount, filterState, SORT_LABELS, type SortKey } from '../st
 import { distinctValues, listPractices, statusOptions } from '../state/selectors';
 import { store } from '../state/store';
 import type { Practice } from '../types';
-import { openSheet } from '../ui/dialog';
+import { confirmDialog, openSheet } from '../ui/dialog';
+import { INTEREST_LABEL } from './events-view';
 import { debounce, h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
-import { dueInfo, practiceColor, STATE_LABEL, stateColor, stateKeyOf } from '../utils/customer';
+import { dueInfo, formatInterval, INTERVAL_CHOICES, practiceColor, STATE_KEYS, STATE_LABEL, stateColor, stateKeyOf, type StateKey } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
 import { entityWord, KIND_LABEL, KIND_PLURAL, kindOf } from '../utils/kind';
 import type { FacilityKind } from '../types';
@@ -29,6 +30,7 @@ export function listView(route: Route): View {
     oninput: debounce(() => filterState.update({ search: search.value }), 200),
   });
   const filterBtn = h('button', { class: 'btn filter-btn', onclick: () => openFilterSheet() });
+  const bulkBtn = h('button', { class: 'btn filter-btn', 'aria-label': 'Mehrere bearbeiten', title: 'Status oder Intervall für alle angezeigten setzen', onclick: () => openBulkEdit(listPractices()) }, iconEl('edit', 20), h('span', { class: 'hide-narrow' }, 'Mehrere'));
   const sortSelect = h(
     'select',
     {
@@ -56,7 +58,7 @@ export function listView(route: Route): View {
       title: store.practiceList().some((p) => kindOf(p) === 'klinik') ? 'Praxen & Kliniken' : 'Praxen',
       actions: h('button', { class: 'icon-btn', 'aria-label': 'Praxis anlegen', onclick: () => navigate('/praxis/neu') }, iconEl('plus', 26)),
     }),
-    h('div', { class: 'list-tools' }, h('div', { class: 'searchbox' }, iconEl('search', 20), search), h('div', { class: 'row' }, filterBtn, sortSelect)),
+    h('div', { class: 'list-tools' }, h('div', { class: 'searchbox' }, iconEl('search', 20), search), h('div', { class: 'row' }, filterBtn, sortSelect, bulkBtn)),
     chips,
     count,
     list,
@@ -121,6 +123,10 @@ export function listView(route: Route): View {
       f.stale && chip('Besuch fällig', () => filterState.update({ stale: false })),
       f.hasAppointment && chip('mit Termin', () => filterState.update({ hasAppointment: false })),
       f.territory !== 'all' && chip(f.territory === 'inside' ? 'im Gebiet' : 'außerhalb Gebiet', () => filterState.update({ territory: 'all' })),
+      f.eventId && f.eventState && chip(
+        `${store.events.get(f.eventId)?.name ?? 'Veranstaltung'}: ${INTEREST_LABEL[f.eventState]}`,
+        () => filterState.update({ eventId: '', eventState: '' }),
+      ),
       f.productId && f.productState && chip(
         `${store.products.get(f.productId)?.name ?? 'Produkt'}: ${f.productState === 'any' ? 'alle' : f.productState}`,
         () => filterState.update({ productId: '', productState: '' }),
@@ -275,6 +281,19 @@ export function openFilterSheet(): void {
   };
   renderKinds();
 
+  const events = store.eventList(true);
+  const eventStateSel = h(
+    'select',
+    { onchange: () => filterState.update({ eventState: filterState.filter.eventId ? (eventStateSel.value as typeof f.eventState) : '' }) },
+    (['offen', 'interesse', 'kein'] as const).map((k) => h('option', { value: k, selected: f.eventState === k }, INTEREST_LABEL[k])),
+  );
+  const eventSel = h(
+    'select',
+    { onchange: () => filterState.update({ eventId: eventSel.value, eventState: eventSel.value ? (eventStateSel.value as typeof f.eventState) || 'offen' : '' }) },
+    h('option', { value: '' }, '– kein Veranstaltungsfilter –'),
+    events.map((e) => h('option', { value: e.id, selected: f.eventId === e.id }, e.name)),
+  );
+
   const sheet = openSheet({
     title: 'Filter',
     content: [
@@ -303,10 +322,81 @@ export function openFilterSheet(): void {
       field('Fachrichtung', multiSelect(distinctValues('specialty'), f.specialties, (v) => filterState.update({ specialties: v }))),
       field('PLZ', multiSelect(distinctValues('plz'), f.plz, (v) => filterState.update({ plz: v }))),
       products.length ? [h('h3', { class: 'sheet-section' }, 'Produkt'), field('Produkt', productSel), field('Zustand', stateSel)] : null,
+      events.length ? [h('h3', { class: 'sheet-section' }, 'Veranstaltung'), field('Veranstaltung', eventSel), field('Stand', eventStateSel)] : null,
     ],
     footer: [
       h('button', { class: 'btn', onclick: () => { filterState.reset(); sheet.close(); } }, 'Zurücksetzen'),
       h('button', { class: 'btn btn-primary', onclick: () => sheet.close() }, 'Fertig'),
     ],
   });
+}
+
+/**
+ * „Mehrere bearbeiten“: Kundenstatus und/oder Besuchsintervall für alle gerade
+ * angezeigten Einträge setzen (vorher mit Suche/Filter eingrenzen).
+ */
+function openBulkEdit(items: Practice[]): void {
+  if (!items.length) {
+    toast('Keine Einträge angezeigt.');
+    return;
+  }
+  let state: StateKey | '' = '';
+  const stateBox = h('div', { class: 'chip-select' });
+  const renderState = () =>
+    setChildren(
+      stateBox,
+      h('button', { class: ['chip-toggle', state === '' && 'on'], onclick: () => { state = ''; renderState(); } }, 'nicht ändern'),
+      STATE_KEYS.map((k) =>
+        h(
+          'button',
+          { class: ['chip-toggle', state === k && 'on'], style: { '--chip': stateColor(k, store.settings) }, onclick: () => { state = k; renderState(); } },
+          h('span', { class: 'dot' }),
+          STATE_LABEL[k],
+        ),
+      ),
+    );
+  renderState();
+  const interval = h(
+    'select',
+    null,
+    h('option', { value: 'keep' }, 'nicht ändern'),
+    h('option', { value: 'default' }, 'Standard (je Kundenstatus)'),
+    INTERVAL_CHOICES.map((d) => h('option', { value: String(d) }, `alle ${formatInterval(d)}`)),
+  );
+  const sheet = openSheet({
+    title: 'Mehrere bearbeiten',
+    content: [
+      h('p', null, `Gilt für die ${items.length} gerade angezeigten Einträge. Tipp: vorher mit Suche oder Filter eingrenzen (z. B. Ort, Kundenstatus).`),
+      h('h3', { class: 'sheet-section' }, 'Kundenstatus'),
+      stateBox,
+      h('h3', { class: 'sheet-section' }, 'Besuchen alle …'),
+      interval,
+    ],
+    footer: [
+      h('button', { class: 'btn', onclick: () => sheet.close() }, 'Abbrechen'),
+      h('button', { class: 'btn btn-primary', onclick: () => void apply() }, 'Übernehmen'),
+    ],
+  });
+  async function apply() {
+    if (state === '' && interval.value === 'keep') {
+      sheet.close();
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'Übernehmen?',
+      message: `${items.length} Einträge werden geändert${state ? ` – Status: ${STATE_LABEL[state]}` : ''}${interval.value !== 'keep' ? ` – Intervall: ${interval.value === 'default' ? 'Standard' : `alle ${formatInterval(Number(interval.value))}`}` : ''}.`,
+      confirmLabel: 'Übernehmen',
+    });
+    if (!ok) return;
+    const changed = items.map((p) => {
+      const next: Practice = { ...(store.getPractice(p.id) ?? p) };
+      if (state) next.customerState = state;
+      if (interval.value === 'default') delete next.visitIntervalDays;
+      else if (interval.value !== 'keep') next.visitIntervalDays = Number(interval.value);
+      return next;
+    });
+    await store.savePractices(changed);
+    sheet.close();
+    toast(`${items.length} Einträge geändert`, { kind: 'success' });
+  }
 }
