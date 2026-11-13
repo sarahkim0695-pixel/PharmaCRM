@@ -143,6 +143,8 @@ export interface Settings {
   intervalDefaultsVersion?: number;
   /** Paare von Einträgen, die als „verschieden, kein Duplikat“ markiert wurden („idA|idB“) */
   dismissedDuplicates?: string[];
+  /** Zuletzt verwendete Orte für Start/Ziel/Platzhalter */
+  recentPlaces?: Place[];
   /** Wurde der Willkommens-Hinweis schon gezeigt? */
   onboardingDone?: boolean;
 }
@@ -175,10 +177,40 @@ export interface TourStop {
   visitMinutes?: number;
 }
 
+/** Ein Ort für Start, Ziel oder Platzhalter (z. B. Hotel, Büro) */
+export interface Place {
+  label: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+/** Pause oder Platzhalter (z. B. Online-Schulung) in einer Tour */
+export interface TourBlock {
+  id: string;
+  kind: 'pause' | 'termin';
+  title: string;
+  /** Dauer in Minuten */
+  minutes: number;
+  /** frühester Beginn (Minuten seit Mitternacht) */
+  from: number;
+  /** spätestes Ende – ist es genau from + minutes, liegt der Block fest */
+  to: number;
+  /** Ort (fehlt = da, wo ich gerade bin, z. B. online im Auto) */
+  place?: Place;
+}
+
 export interface Tour {
   id: string; // = Datum „YYYY-MM-DD“ (eine Tour pro Tag)
   date: string;
-  startMode: 'home' | 'here';
+  /** Start: zuhause, aktueller Standort oder ein anderer Ort (startPlace) */
+  startMode: 'home' | 'here' | 'place';
+  startPlace?: Place;
+  /** Ziel: zuhause, beim letzten Termin oder ein anderer Ort (fehlt = aus returnHome) */
+  endMode?: 'home' | 'last' | 'place';
+  endPlace?: Place;
+  /** Weitere Pausen und Platzhalter (z. B. Online-Schulung) */
+  blocks?: TourBlock[];
   dayStart: number;
   dayEnd: number;
   returnHome: boolean;
@@ -203,7 +235,7 @@ export type PlanEntry =
   | { kind: 'start'; time: number; label: string }
   | { kind: 'drive'; from: number; to: number; minutes: number; km: number }
   | { kind: 'visit'; practiceId: string; arrive: number; start: number; end: number; wait: number; park: number; fixed: boolean }
-  | { kind: 'break'; start: number; end: number }
+  | { kind: 'break'; start: number; end: number; title?: string; blockId?: string; blockKind?: TourBlock['kind']; place?: string }
   | { kind: 'end'; time: number; label: string };
 
 export interface TourPlan {
@@ -211,6 +243,10 @@ export interface TourPlan {
   /** Woher die Fahrzeiten stammen */
   source: 'osrm' | 'estimate';
   startPoint: { lat: number; lng: number; label: string };
+  /** Ziel (fehlt = Ende beim letzten Termin) */
+  endPoint?: { lat: number; lng: number; label: string };
+  /** Pausen/Platzhalter, die nicht in den Tag passen */
+  droppedBlocks?: { blockId: string; title: string; reason: string }[];
   entries: PlanEntry[];
   dropped: { practiceId: string; reason: string }[];
   totals: {

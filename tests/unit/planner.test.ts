@@ -139,3 +139,74 @@ describe('Dauer vor Ort einstellen', () => {
     expect(formatMinutes(120)).toBe('2 Std.');
   });
 });
+
+describe('Start, Ziel, Pausen und Platzhalter', () => {
+  const place = (label: string, lat: number, lng: number) => ({ label, address: label, lat, lng });
+
+  it('startet im Hotel und endet im Büro', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([practice('a', 48.37, 10.89), practice('b', 48.36, 10.90)]);
+    const tour = newTour('2026-11-11');
+    tour.stops = [{ practiceId: 'a', must: false }, { practiceId: 'b', must: false }];
+    tour.startMode = 'place';
+    tour.startPlace = place('Hotel Augsburg', 48.365, 10.895);
+    tour.endMode = 'place';
+    tour.endPlace = place('Büro', 48.14, 11.56);
+    const plan = await computePlan(tour);
+    expect(plan.startPoint.label).toBe('Hotel Augsburg');
+    expect(plan.endPoint?.label).toBe('Büro');
+    expect(plan.entries[0]).toMatchObject({ kind: 'start', label: 'Hotel Augsburg' });
+    expect(plan.entries.at(-1)).toMatchObject({ kind: 'end', label: 'Büro' });
+    const lastDrive = plan.entries.at(-2)!;
+    expect(lastDrive.kind === 'drive' && lastDrive.km).toBeGreaterThan(40); // Augsburg → München
+  });
+
+  it('Ende beim letzten Termin: keine Rückfahrt', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([practice('a', 48.14, 11.56)]);
+    const tour = newTour('2026-11-11');
+    tour.stops = [{ practiceId: 'a', must: true }];
+    tour.endMode = 'last';
+    const plan = await computePlan(tour);
+    expect(plan.endPoint).toBeUndefined();
+    expect(plan.entries.at(-1)).toMatchObject({ kind: 'end', label: 'Feierabend' });
+  });
+
+  it('Online-Schulung ohne Ort, Meeting mit Ort und flexible Kaffeepause im Zeitplan', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([practice('a', 48.14, 11.56), practice('b', 48.15, 11.58), practice('c', 48.16, 11.55)]);
+    const tour = newTour('2026-11-11');
+    tour.stops = ['a', 'b', 'c'].map((practiceId) => ({ practiceId, must: true }));
+    tour.blocks = [
+      { id: 'on', kind: 'termin', title: 'Online-Schulung', minutes: 90, from: 14 * 60, to: 15 * 60 + 30 },
+      { id: 'kaffee', kind: 'pause', title: 'Kaffeepause', minutes: 20, from: 15 * 60 + 30, to: 17 * 60 },
+      { id: 'mt', kind: 'termin', title: 'Meeting', minutes: 30, from: 10 * 60, to: 10 * 60 + 30, place: place('Büro', 48.13, 11.57) },
+    ];
+    const plan = await computePlan(tour);
+    const blocks = Object.fromEntries(plan.entries.flatMap((e) => (e.kind === 'break' && e.blockId ? [[e.blockId, e]] : [])));
+    expect(blocks.on).toMatchObject({ start: 14 * 60, end: 15 * 60 + 30, title: 'Online-Schulung', blockKind: 'termin' });
+    expect(blocks.mt).toMatchObject({ start: 10 * 60, end: 10 * 60 + 30, place: 'Büro' });
+    expect(blocks.kaffee.end - blocks.kaffee.start).toBe(20);
+    expect(blocks.kaffee.start).toBeGreaterThanOrEqual(15 * 60 + 30);
+    expect(plan.totals.visits).toBe(3); // Meeting zählt nicht als Besuch
+    // vor dem Meeting mit Ort wird hingefahren
+    const idx = plan.entries.findIndex((e) => e.kind === 'break' && e.blockId === 'mt');
+    expect(plan.entries[idx - 1].kind).toBe('drive');
+    expect(plan.droppedBlocks).toBeUndefined();
+  });
+
+  it('meldet einen Platzhalter, der nicht passt', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([practice('a', 48.14, 11.56)]);
+    const tour = newTour('2026-11-11');
+    tour.stops = [{ practiceId: 'a', must: true }];
+    tour.dayEnd = 15 * 60;
+    tour.blocks = [{ id: 'spaet', kind: 'termin', title: 'Abendschulung', minutes: 60, from: 18 * 60, to: 19 * 60 }];
+    const plan = await computePlan(tour);
+    expect(plan.droppedBlocks).toEqual([{ blockId: 'spaet', title: 'Abendschulung', reason: expect.stringMatching(/passt/i) }]);
+  });
+});

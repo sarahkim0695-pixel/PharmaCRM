@@ -2,7 +2,7 @@
  * Tour-Optimierung: In welcher Reihenfolge besuche ich die Praxen, damit
  *  1. möglichst alle (wichtigen) Praxen in den Tag passen,
  *  2. ich möglichst früh fertig bin (wenig Fahr- und Wartezeit),
- *  3. Öffnungszeiten, Termine, Mittagspause und Feierabend eingehalten werden?
+ *  3. Öffnungszeiten, Termine, Pausen, Platzhalter (z. B. Online-Schulung) und Feierabend eingehalten werden?
  *
  * Verfahren (Heuristik, für bis zu ca. 40 Stopps in Millisekunden):
  *  - „Günstigstes Einfügen“: Stopps nacheinander dort einfügen, wo sie den Tag am wenigsten verlängern
@@ -25,6 +25,19 @@ export interface OptStop {
   must: boolean;
   /** Wichtigkeit (> 0), z. B. höher bei „lange nicht besucht“ */
   weight: number;
+  /** Zählt als Besuch (Höchstzahl)? false z. B. bei einem Platzhalter mit Ort */
+  countsAsVisit?: boolean;
+}
+
+/** Pause oder Platzhalter ohne Ort: Zeit vergeht, der Standort bleibt */
+export interface OptBreak {
+  /** Beginn frühestens */
+  from: number;
+  /** Ende spätestens */
+  to: number;
+  minutes: number;
+  /** Muss stattfinden (Platzhalter) – sonst wie die Mittagspause nur „sehr wichtig“ */
+  must?: boolean;
 }
 
 export interface OptInput {
@@ -33,6 +46,8 @@ export interface OptInput {
   returnToStart: boolean;
   /** Pause: Beginn frühestens `from`, Ende spätestens `to` */
   lunch?: { from: number; to: number; minutes: number };
+  /** Weitere Pausen und Platzhalter ohne Ort */
+  breaks?: OptBreak[];
   stops: OptStop[];
   /** Fahrminuten: Index 0 = Start, i + 1 = stops[i] */
   travel: number[][];
@@ -42,7 +57,8 @@ export interface OptInput {
 
 export type OptItem =
   | { kind: 'visit'; stop: number; driveStart: number; driveMinutes: number; arrive: number; start: number; end: number; wait: number }
-  | { kind: 'break'; start: number; end: number };
+  /** block = Index in allBreaks(input): 0 = Mittagspause (falls gesetzt), danach input.breaks */
+  | { kind: 'break'; start: number; end: number; block: number };
 
 export interface OptResult {
   /** Reihenfolge der Stopps (Indizes in input.stops) */
@@ -50,6 +66,8 @@ export interface OptResult {
   items: OptItem[];
   dropped: number[];
   lunchIncluded: boolean;
+  /** Pausen/Platzhalter (Index wie bei OptItem.block), die nicht in den Tag passten */
+  droppedBreaks: number[];
   departure: number;
   /** Zeitpunkt Rückkehr (bzw. Ende des letzten Besuchs) */
   end: number;
@@ -58,7 +76,9 @@ export interface OptResult {
   returnDrive: number;
 }
 
-const LUNCH = -1;
+/** In einer Reihenfolge steht Pause/Platzhalter j als -(j + 1) – Praxen als Index ≥ 0 */
+const breakCode = (j: number) => -(j + 1);
+const breakIndex = (code: number) => -code - 1;
 const MUST_PENALTY = 1_000_000;
 const LUNCH_PENALTY = 100_000;
 const STOP_PENALTY = 1_000;
@@ -71,6 +91,20 @@ interface Sim {
   returnDrive: number;
 }
 
+const breakCache = new WeakMap<OptInput, OptBreak[]>();
+/** Mittagspause (falls gesetzt) + weitere Pausen/Platzhalter */
+export function allBreaks(input: OptInput): OptBreak[] {
+  let b = breakCache.get(input);
+  if (!b) {
+    b = [...(input.lunch ? [{ ...input.lunch, must: false }] : []), ...(input.breaks ?? [])];
+    breakCache.set(input, b);
+  }
+  return b;
+}
+
+const breakPenalty = (b: OptBreak) => (b.must ? MUST_PENALTY : LUNCH_PENALTY);
+const countsAsVisit = (input: OptInput, el: number) => el >= 0 && input.stops[el].countsAsVisit !== false;
+
 /** Spielt eine Reihenfolge durch. null = nicht machbar. */
 export function simulate(input: OptInput, seq: number[], departure = input.dayStart): Sim | null {
   let time = departure;
@@ -79,12 +113,12 @@ export function simulate(input: OptInput, seq: number[], departure = input.daySt
   let wait = 0;
   const items: OptItem[] = [];
   for (const el of seq) {
-    if (el === LUNCH) {
-      const L = input.lunch!;
-      const s = Math.max(time, L.from);
-      if (s + L.minutes > L.to) return null;
-      items.push({ kind: 'break', start: s, end: s + L.minutes });
-      time = s + L.minutes;
+    if (el < 0) {
+      const B = allBreaks(input)[breakIndex(el)];
+      const s = Math.max(time, B.from);
+      if (s + B.minutes > B.to) return null;
+      items.push({ kind: 'break', start: s, end: s + B.minutes, block: breakIndex(el) });
+      time = s + B.minutes;
       continue;
     }
     const st = input.stops[el];
@@ -124,7 +158,9 @@ function penalty(input: OptInput, seq: number[]): number {
   input.stops.forEach((s, i) => {
     if (!inSeq.has(i)) p += s.must ? MUST_PENALTY : STOP_PENALTY * s.weight;
   });
-  if (input.lunch && !inSeq.has(LUNCH)) p += LUNCH_PENALTY;
+  allBreaks(input).forEach((b, j) => {
+    if (!inSeq.has(breakCode(j))) p += breakPenalty(b);
+  });
   return p;
 }
 
@@ -159,11 +195,11 @@ function insertAll(input: OptInput, seq: number[], candidates: number[], noise: 
     if (!curSim) break;
     const base = curSim.end + 0.05 * curSim.drive;
     let best: { seq: number[]; score: number; el: number } | null = null;
-    const visits = current.filter((x) => x !== LUNCH).length;
+    const visits = current.filter((x) => countsAsVisit(input, x)).length;
     for (const el of open) {
-      // Höchstzahl an Besuchen erreicht → nur noch Pause und feste Stopps
-      if (el !== LUNCH && !input.stops[el].must && input.maxVisits !== undefined && visits >= input.maxVisits) continue;
-      const prio = el === LUNCH ? LUNCH_PENALTY : input.stops[el].must ? MUST_PENALTY : STOP_PENALTY * input.stops[el].weight;
+      // Höchstzahl an Besuchen erreicht → nur noch Pausen, Platzhalter und feste Stopps
+      if (countsAsVisit(input, el) && !input.stops[el].must && input.maxVisits !== undefined && visits >= input.maxVisits) continue;
+      const prio = el < 0 ? breakPenalty(allBreaks(input)[breakIndex(el)]) : input.stops[el].must ? MUST_PENALTY : STOP_PENALTY * input.stops[el].weight;
       for (let pos = 0; pos <= current.length; pos++) {
         const cand = [...current.slice(0, pos), el, ...current.slice(pos)];
         const sim = simulate(input, cand);
@@ -247,7 +283,7 @@ export function optimizeTour(input: OptInput, opts: { restarts?: number; seed?: 
   // Weniger Durchläufe bei vielen Stopps, damit es auf dem iPad schnell bleibt
   const restarts = opts.restarts ?? (input.stops.length <= 12 ? 24 : input.stops.length <= 25 ? 12 : 6);
   const all = [...input.stops.keys()];
-  const withLunch = input.lunch ? [LUNCH, ...all] : all;
+  const withLunch = [...allBreaks(input).map((_, j) => breakCode(j)), ...all];
 
   let best: number[] = [];
   let bestCost = evaluate(input, best);
@@ -275,10 +311,11 @@ export function optimizeTour(input: OptInput, opts: { restarts?: number; seed?: 
   const sim = simulate(input, best, departure)!;
   const inSeq = new Set(best);
   return {
-    order: best.filter((x) => x !== LUNCH),
+    order: best.filter((x) => x >= 0),
     items: sim.items,
     dropped: all.filter((i) => !inSeq.has(i)),
-    lunchIncluded: inSeq.has(LUNCH),
+    lunchIncluded: !!input.lunch && inSeq.has(breakCode(0)),
+    droppedBreaks: allBreaks(input).map((_, j) => j).filter((j) => !inSeq.has(breakCode(j))),
     departure,
     end: sim.end,
     driveMinutes: sim.drive,

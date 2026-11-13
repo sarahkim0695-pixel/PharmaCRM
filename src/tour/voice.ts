@@ -36,6 +36,14 @@ export interface FixedVisit extends PracticeRef {
   minutes?: number;
 }
 
+export interface VoiceBlock {
+  kind: 'pause' | 'termin';
+  title: string;
+  minutes: number;
+  from?: number;
+  to?: number;
+}
+
 export interface VoiceCommand {
   text: string;
   date?: string;
@@ -50,6 +58,8 @@ export interface VoiceCommand {
   fixed: FixedVisit[];
   exclude: PracticeRef[];
   bring: { target?: PracticeRef; items: string }[];
+  /** Platzhalter (z. B. Online-Schulung) und weitere Pausen; ohne from/to = irgendwann am Tag */
+  blocks: VoiceBlock[];
   note?: string;
   maxVisits?: number;
   dayStart?: number;
@@ -250,7 +260,8 @@ const IGNORE = new Set(
   (
     'wenn es passt optional moglich falls eventuell vielleicht ohne kein keine keinen nicht nach hause zuhause daheim zuruck heim von ab hier ' +
     'neu nochmal besucht lange sein fertig start starten los losfahren beginn beginnen anfangen ende feierabend schluss spatestens fruh fruhestens ' +
-    'zwischen wieder machen mache weg weglassen streichen raus entfernen auslassen kontakt startlochern lass lasse aus dauert dauern'
+    'zwischen wieder machen mache weg weglassen streichen raus entfernen auslassen kontakt startlochern lass lasse aus dauert dauern ' +
+    'irgendwann flexibel vormittag vormittags nachmittag nachmittags online habe hab'
   ).split(' '),
 );
 
@@ -357,6 +368,56 @@ class Matcher {
   }
 }
 
+// ---------- Platzhalter und weitere Pausen ----------
+
+const BLOCK_WORDS: [RegExp, VoiceBlock['kind'], string][] = [
+  [/\bonline\s*-?\s*schulung\w*\b/, 'termin', 'Online-Schulung'],
+  [/\bschulung\w*\b|\bfortbildung\w*\b|\btraining\b/, 'termin', 'Schulung'],
+  [/\bwebinar\w*\b/, 'termin', 'Webinar'],
+  [/\btelefonkonferenz\w*\b|\btelko\b|\btelefonat\w*\b/, 'termin', 'Telefonkonferenz'],
+  [/\bvideokonferenz\w*\b|\bteams\s*-?\s*meeting\b|\bzoom\w*\b|\bteams\b/, 'termin', 'Videokonferenz'],
+  [/\bmeeting\b|\bbesprechung\w*\b|\bjour fixe\b/, 'termin', 'Meeting'],
+  [/\bburo(arbeit|zeit|tag)?\b|\bschreibtisch\w*\b|\bburokram\b/, 'termin', 'Büro'],
+  [/\bplatzhalter\b|\bblocker\b|\bblock\b/, 'termin', 'Platzhalter'],
+  [/\b(kaffeepause|kurze pause|kleine pause|zweite pause|weitere pause|noch eine pause|nachmittagspause|vormittagspause|pause am (nach|vor)mittag)\b/, 'pause', 'Pause'],
+];
+
+function findBlockWord(w: string): { kind: VoiceBlock['kind']; title: string; start: number; end: number } | undefined {
+  for (const [re, kind, title] of BLOCK_WORDS) {
+    const m = w.match(re);
+    if (m) return { kind, title: kind === 'pause' && /kaffee/.test(m[0]) ? 'Kaffeepause' : title, start: m.index!, end: m.index! + m[0].length };
+  }
+  return undefined;
+}
+
+/** Zeit und Dauer eines Platzhalters/einer Pause: fest („von 14 bis 15:30“, „um 9, 30 Minuten“) oder flexibel („zwischen 15 und 17 Uhr“, „nachmittags“) */
+function readBlock(w: string, kind: VoiceBlock['kind'], title: string): { block: VoiceBlock; used: [number, number][] } {
+  const used: [number, number][] = [];
+  const min = w.match(/\b(\d{1,3})\s*(min|minuten)\b/);
+  if (min) used.push([min.index!, min.index! + min[0].length]);
+  const minutes = min ? Number(min[1]) : undefined;
+  const times = findTimes(w);
+  times.forEach((t) => used.push([t.start, t.end]));
+  const flexible = /\b(zwischen|irgendwann|flexibel)\b/.test(w);
+  const dflt = kind === 'pause' ? 15 : 60;
+  let block: VoiceBlock;
+  if (times.length >= 2 && !flexible) {
+    block = { kind, title, minutes: times[1].minutes - times[0].minutes, from: times[0].minutes, to: times[1].minutes };
+  } else if (times.length >= 2) {
+    block = { kind, title, minutes: minutes ?? dflt, from: times[0].minutes, to: times[1].minutes };
+  } else if (times.length === 1) {
+    const m = minutes ?? dflt;
+    block = { kind, title, minutes: m, from: times[0].minutes, to: times[0].minutes + m };
+  } else if (/\bvormittags?\b|\bam vormittag\b/.test(w)) {
+    block = { kind, title, minutes: minutes ?? dflt, from: 8 * 60, to: 12 * 60 };
+  } else if (/\bnachmittags?\b|\bam nachmittag\b/.test(w)) {
+    block = { kind, title, minutes: minutes ?? dflt, from: 13 * 60, to: 18 * 60 };
+  } else {
+    block = { kind, title, minutes: minutes ?? dflt };
+  }
+  return { block, used };
+}
+
 // ---------- Auswerten ----------
 
 /** Enthält der Teilsatz etwas, das nach einer Anweisung aussieht (Datum, Uhrzeit, Ort, „Dr.“ …)? */
@@ -380,7 +441,7 @@ const KIND_PATTERNS: [FacilityKind, RegExp][] = [
 
 /** Liest einen gesprochenen/getippten Auftrag */
 export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand {
-  const cmd: VoiceCommand = { text, fixed: [], exclude: [], bring: [], unknownPlaces: [], unknown: [] };
+  const cmd: VoiceCommand = { text, fixed: [], exclude: [], bring: [], blocks: [], unknownPlaces: [], unknown: [] };
   const matcher = new Matcher(ctx);
   const byId = new Map(ctx.practices.map((p) => [p.id, p]));
   const ref = (said: string, ids: string[], regionCities: string[]): PracticeRef => {
@@ -393,7 +454,7 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
   let pendingItems = '';
   let sawPlanWord = false;
   /** Was der vorige Teilsatz war – für „…, 30 Minuten“ / „…, dauert eine Stunde“ */
-  let prevClause: 'lunch' | 'fixed' | 'other' = 'other';
+  let prevClause: 'lunch' | 'fixed' | 'block' | 'other' = 'other';
 
   const clauses = splitClauses(text);
   for (let ci = 0; ci < clauses.length; ci++) {
@@ -475,8 +536,33 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
       understood = true;
     }
 
+    // Platzhalter (Online-Schulung, Telefonkonferenz …) und weitere Pausen (Kaffeepause …)
+    const blockHit = !matcher.practices(w).length ? findBlockWord(w) : undefined;
+    let blockClause = false;
+    if (blockHit) {
+      blockClause = true;
+      const block = readBlock(w, blockHit.kind, blockHit.title);
+      cmd.blocks.push(block.block);
+      block.used.forEach(([a, b]) => consume(a, b));
+      consume(blockHit.start, blockHit.end);
+      understood = true;
+    }
+
     // Mittagspause – nur Zeiten rund um das Wort „Mittag/Pause“
-    const lunchWord = w.match(/\b(mittag\w*|pause|essen)\b/);
+    let lunchWord = w.match(/\b(mittag\w*|pause|essen)\b/);
+    // „Pause um 16 Uhr, 15 Minuten“ (außerhalb der Mittagszeit) = weitere Pause
+    if (lunchWord && lunchWord[1] === 'pause') {
+      const t = findTimes(w)[0];
+      if (t && (t.minutes < 11 * 60 || t.minutes >= 14 * 60 + 30)) {
+        const block = readBlock(w, 'pause', 'Pause');
+        cmd.blocks.push(block.block);
+        block.used.forEach(([a, b]) => consume(a, b));
+        consume(lunchWord.index!, lunchWord.index! + lunchWord[0].length);
+        lunchWord = null;
+        blockClause = true;
+        understood = true;
+      }
+    }
     if (lunchWord) {
       const lunch = { ...(cmd.lunch ?? { enabled: true }) } as NonNullable<VoiceCommand['lunch']>;
       const at = lunchWord.index!;
@@ -646,6 +732,18 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
       understood = true;
     }
 
+    // „Telefonkonferenz um 9, 30 Minuten“ → Dauer des Platzhalters
+    const loneBlock = w.match(/^\s*(?:(?:dauert|dauer|etwa|ca|ungefahr|fur)\s+)*(\d{1,3})\s*(min|minuten)\b(?:\s+(?:lang|dauer))?\s*$/);
+    if (loneBlock && prevClause === 'block' && cmd.blocks.length) {
+      const b = cmd.blocks[cmd.blocks.length - 1];
+      const fixed = b.from !== undefined && b.to !== undefined && b.to - b.from === b.minutes;
+      b.minutes = Number(loneBlock[1]);
+      if (fixed) b.to = b.from! + b.minutes;
+      consume(0, w.length);
+      understood = true;
+      blockClause = true;
+    }
+
     // „…, 30 Minuten“ direkt nach der Mittagspause
     const lone = w.match(/^\s*(\d{1,3})\s*(min|minuten)\s*$/);
     if (lone && cmd.lunch?.enabled && prevClause === 'lunch') {
@@ -678,7 +776,7 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
     }
     if (planWord) sawPlanWord = true;
     cmd.unknown.push(...rest);
-    prevClause = lunchWord ? 'lunch' : clausePractices.length && !clausePractices.every(({ hit }) => negatedAt(hit.start, hit.end)) ? 'fixed' : prevClause === 'fixed' && loneVisit ? 'fixed' : 'other';
+    prevClause = blockClause ? 'block' : lunchWord ? 'lunch' : clausePractices.length && !clausePractices.every(({ hit }) => negatedAt(hit.start, hit.end)) ? 'fixed' : prevClause === 'fixed' && loneVisit ? 'fixed' : 'other';
   }
   if (pendingItems) cmd.unknown.push(...words(pendingItems).filter((x) => !VOCAB.has(x)));
 
@@ -697,7 +795,7 @@ export function isEmpty(cmd: VoiceCommand): boolean {
   return (
     !cmd.date && !cmd.clear && !cmd.region && cmd.radiusKm === undefined && !cmd.kinds && !cmd.states && !cmd.onlyDue && !cmd.fill &&
     !cmd.fixed.length && !cmd.exclude.length && !cmd.bring.length && !cmd.note && cmd.maxVisits === undefined &&
-    cmd.dayStart === undefined && cmd.dayEnd === undefined && !cmd.lunch && !cmd.startMode && cmd.returnHome === undefined
+    cmd.dayStart === undefined && cmd.dayEnd === undefined && !cmd.lunch && !cmd.startMode && cmd.returnHome === undefined && !cmd.blocks.length
   );
 }
 

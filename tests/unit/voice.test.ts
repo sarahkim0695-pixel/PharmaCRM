@@ -153,3 +153,18 @@ describe('Sprachsteuerung – Verstehen', () => {
     expect(c.unknown).toEqual(['blumen', 'giesen']);
   });
 });
+
+describe('Sprachsteuerung – Platzhalter und weitere Pausen', () => {
+  it('Online-Schulung, Telefonkonferenz, Kaffeepause', () => {
+    expect(run('Online-Schulung von 14 bis 15:30').blocks).toEqual([{ kind: 'termin', title: 'Online-Schulung', minutes: 90, from: 840, to: 930 }]);
+    expect(run('Telefonkonferenz um 9, 30 Minuten').blocks).toEqual([{ kind: 'termin', title: 'Telefonkonferenz', minutes: 30, from: 540, to: 570 }]);
+    expect(run('Kaffeepause 20 Minuten zwischen 15 und 17 Uhr').blocks).toEqual([{ kind: 'pause', title: 'Kaffeepause', minutes: 20, from: 900, to: 1020 }]);
+    expect(run('Nachmittags eine Stunde Büro').blocks).toEqual([{ kind: 'termin', title: 'Büro', minutes: 60, from: 780, to: 1080 }]);
+    expect(run('Pause um 16 Uhr').blocks).toEqual([{ kind: 'pause', title: 'Pause', minutes: 15, from: 960, to: 975 }]);
+    // Mittagspause bleibt die Mittagspause
+    const c = run('Dienstag in Augsburg, Mittagspause halb eins, Online-Schulung von 14 bis 15 Uhr');
+    expect(c.lunch).toMatchObject({ enabled: true, from: 750 });
+    expect(c.blocks).toMatchObject([{ title: 'Online-Schulung', from: 840, to: 900 }]);
+    expect(c.unknown).toEqual([]);
+  });
+});

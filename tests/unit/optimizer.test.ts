@@ -98,3 +98,54 @@ describe('Tour-Optimierung', () => {
     expect(r.dropped.length).toBe(0);
   });
 });
+
+describe('Pausen und Platzhalter', () => {
+  it('fester Platzhalter (Online-Schulung 14:00–15:30) liegt genau dort, Besuche drumherum', () => {
+    const r = optimizeTour(
+      base({
+        stops: [stop({ visit: 60 }), stop({ visit: 60 }), stop({ visit: 60 }), stop({ visit: 60 })],
+        travel: lineTravel([0, 10, 20, 30, 40]),
+        breaks: [{ from: T(14), to: T(15, 30), minutes: 90, must: true }],
+      }),
+    );
+    const brk = r.items.find((i) => i.kind === 'break')!;
+    expect(brk).toMatchObject({ start: T(14), end: T(15, 30), block: 0 });
+    for (const v of r.items) if (v.kind === 'visit') expect(v.end <= brk.start || v.start >= brk.end).toBe(true);
+    expect(r.droppedBreaks).toEqual([]);
+  });
+
+  it('flexible Pause (20 min zwischen 15 und 17 Uhr) zusätzlich zur Mittagspause', () => {
+    const r = optimizeTour(
+      base({
+        stops: [stop({ visit: 90 }), stop({ visit: 90 }), stop({ visit: 90 }), stop({ visit: 90 })],
+        travel: lineTravel([0, 10, 20, 30, 40]),
+        lunch: { from: T(12), to: T(14), minutes: 45 },
+        breaks: [{ from: T(15), to: T(17), minutes: 20 }],
+      }),
+    );
+    const breaks = r.items.filter((i) => i.kind === 'break');
+    expect(breaks.map((b) => b.kind === 'break' && b.block).sort()).toEqual([0, 1]); // 0 = Mittag, 1 = weitere Pause
+    const extra = breaks.find((b) => b.kind === 'break' && b.block === 1)!;
+    expect(extra.start).toBeGreaterThanOrEqual(T(15));
+    expect(extra.end - extra.start).toBe(20);
+    expect(extra.end).toBeLessThanOrEqual(T(17));
+    expect(r.lunchIncluded).toBe(true);
+  });
+
+  it('Platzhalter mit Ort zählt nicht als Besuch (Höchstzahl)', () => {
+    const r = optimizeTour(
+      base({
+        stops: [stop(), stop(), stop({ must: true, countsAsVisit: false, windows: [{ from: T(13), to: T(13) }], visit: 60, park: 0 })],
+        travel: lineTravel([0, 10, 20, 15]),
+        maxVisits: 2,
+      }),
+    );
+    expect(r.dropped).toEqual([]);
+    expect(r.order).toHaveLength(3);
+  });
+
+  it('meldet Platzhalter, die nicht in den Tag passen', () => {
+    const r = optimizeTour(base({ dayEnd: T(12), breaks: [{ from: T(14), to: T(15), minutes: 60, must: true }] }));
+    expect(r.droppedBreaks).toEqual([0]);
+  });
+});

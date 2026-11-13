@@ -496,6 +496,26 @@ button.stat:disabled { opacity: 0.6; }
 .hours-examples li span { color: var(--muted); font-size: 15px; }
 .hours-preview code { background: #eef2f7; padding: 1px 6px; border-radius: 6px; font-size: 0.95em; white-space: nowrap; }
 
+/* ---------- Start/Ziel, Pausen & Platzhalter ---------- */
+
+.segmented-3 .seg { font-size: 14px; padding: 0 4px; }
+.place-line { margin: -6px 0 12px; font-size: 15px; }
+.place-recent { display: flex; flex-direction: column; gap: 8px; }
+.place-recent .chip-toggle { justify-content: flex-start; text-align: left; white-space: normal; height: auto; padding: 10px 14px; }
+.place-recent small { color: var(--muted); font-weight: 400; }
+.place-status { display: flex; align-items: center; gap: 4px; margin: -4px 0 10px; }
+.block-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.block-list li { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #edf0f4; }
+.block-item { flex: 1; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 4px; border: none; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.block-item > .icon:last-child { color: #a3adbb; flex: none; }
+.block-icon { font-size: 22px; width: 28px; text-align: center; flex: none; }
+.block-titles { margin: -4px 0 14px; }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.block-end { min-height: 48px; display: flex; align-items: center; font-weight: 600; font-size: 17px; }
+.tl-block .tl-body { background: #f3eefc; border-radius: 12px; padding: 10px 12px; }
+.tl-block .tl-title { font-weight: 700; }
+.tour-end span { background: #6b3fa0; }
+
 /* ---------- Sprachsteuerung ---------- */
 
 .voice-open {
