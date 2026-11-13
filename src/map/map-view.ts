@@ -68,6 +68,8 @@ export class MapView {
   private overlay: HTMLElement;
   private els: Record<string, HTMLElement> = {};
   private legendOpen = false;
+  /** Pins bei wenig Zoom zu Zahlen-Kreisen bündeln (Schalter in der Legende) */
+  private bundlePins = loadBundleSetting();
   private queueStatus: QueueStatus | null = null;
   private visible = false;
   private needsInitialView = false;
@@ -92,9 +94,10 @@ export class MapView {
     }).addTo(this.map);
 
     this.cluster = L.markerClusterGroup({
-      // Ab Zoomstufe 15 nur noch (fast) gleiche Standorte bündeln – z. B. mehrere Praxen
-      // in einem Ärztehaus. Antippen fächert sie auf („spiderfy“).
-      maxClusterRadius: (zoom: number) => (zoom >= 15 ? 12 : 45),
+      // Je näher herangezoomt, desto kleiner der Bündel-Bereich – ab Stadtteil-Ansicht
+      // einzelne Pins. Gleiche Standorte (z. B. Ärztehaus) bleiben gebündelt und
+      // fächern sich beim Antippen auf („spiderfy“).
+      maxClusterRadius: (zoom: number) => clusterRadius(zoom, this.bundlePins),
       showCoverageOnHover: false,
       spiderfyOnMaxZoom: true,
       chunkedLoading: true,
@@ -102,7 +105,7 @@ export class MapView {
         L.divIcon({
           html: `<span>${c.getChildCount()}</span>`,
           className: 'cluster',
-          iconSize: [42, 42],
+          iconSize: [38, 38],
         }),
     });
     this.cluster.addTo(this.map);
@@ -329,6 +332,19 @@ export class MapView {
       iconAnchor: [18, 38],
       popupAnchor: [0, -34],
     });
+  }
+
+  /** Bündeln an/aus – die Cluster müssen dafür neu aufgebaut werden. */
+  private setBundlePins(on: boolean): void {
+    this.bundlePins = on;
+    try {
+      localStorage.setItem(BUNDLE_KEY, on ? '1' : '0');
+    } catch {
+      /* egal */
+    }
+    const markers = [...this.markers.values()];
+    this.cluster.clearLayers();
+    this.cluster.addLayers(markers);
   }
 
   refreshPractices(): void {
@@ -679,6 +695,21 @@ export class MapView {
             ),
           ),
           h('li', { class: 'legend-hint' }, h('span', { class: 'pin-mini pin-review' }), 'gelber Rand = prüfen'),
+          h(
+            'li',
+            null,
+            h(
+              'label',
+              { class: 'legend-switch' },
+              h('span', null, 'Pins bündeln', h('small', null, 'bei wenig Zoom als Zahl')),
+              h('input', {
+                type: 'checkbox',
+                class: 'switch',
+                checked: this.bundlePins,
+                onchange: (e: Event) => this.setBundlePins((e.target as HTMLInputElement).checked),
+              }),
+            ),
+          ),
           store.practiceList().some((p) => kindOf(p) === 'klinik')
             ? h('li', { class: 'legend-hint' }, h('span', { class: 'pin-mini pin-mini-klinik' }), 'Quadrat = Klinik')
             : null,
@@ -716,4 +747,31 @@ export class MapView {
       ),
     );
   }
+}
+
+// ---------- Bündeln der Pins ----------
+
+const BUNDLE_KEY = 'repmap.bundlePins';
+
+function loadBundleSetting(): boolean {
+  try {
+    return localStorage.getItem(BUNDLE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Bündel-Radius in Bildschirmpunkten je Zoomstufe.
+ * Übersicht (Bayern) stark bündeln, Stadt nur noch eng beieinander liegende,
+ * ab Stadtteil (Zoom 14) praktisch nur noch gleiche Standorte.
+ */
+export function clusterRadius(zoom: number, bundle = true): number {
+  if (!bundle) return 1; // nur exakt gleiche Standorte
+  if (zoom <= 10) return 50;
+  if (zoom === 11) return 40;
+  if (zoom === 12) return 34;
+  if (zoom === 13) return 16;
+  if (zoom <= 15) return 8;
+  return 1;
 }

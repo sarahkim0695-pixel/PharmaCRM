@@ -892,6 +892,10 @@ dialog.sheet::backdrop { background: rgba(10, 20, 40, 0.4); }
 .legend-label { flex: 1; }
 .legend-count { color: var(--muted); font-size: 14px; }
 .legend-hint { display: flex; align-items: center; gap: 10px; padding: 8px; font-size: 13px; color: var(--muted); }
+.legend-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-top: 1px solid #edf0f4; margin-top: 4px; }
+.legend-switch > span { display: flex; flex-direction: column; font-size: 15px; font-weight: 600; }
+.legend-switch small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.legend-switch input.switch { transform: scale(0.85); }
 .pin-mini { width: 14px; height: 14px; border-radius: 50%; background: #8a94a6; border: 3px solid var(--review); }
 .map-progress {
   position: absolute;
