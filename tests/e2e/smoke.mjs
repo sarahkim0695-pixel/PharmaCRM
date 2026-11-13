@@ -142,7 +142,16 @@ try {
   assert.match(statsText, /2\s*Kliniken/);
   assert.match(statsText, /1\s*doppelte Zeilen aussortiert/);
   assert.match(statsText, /4\s*gelb/);
+  // Öffnungszeiten aus der Datei: Quelle, Anzahl und Beispiele zum Prüfen
+  const hoursText = await page.locator('.hours-preview').innerText();
+  assert.match(hoursText, /Bei 7 von 11 Einträgen übernommen – aus Spalte „Öffnungszeiten“/);
+  assert.match(hoursText, /Praxis Dr\. Anna Beispiel\s*Mo, Di, Do 08:00–12:00, 14:00–18:00/);
+  assert.match(hoursText, /Nicht lesbar: 1/);
   await shot('03-import-vorschau');
+  if (shots) {
+    await page.locator('.hours-preview').scrollIntoViewIfNeeded();
+    await shot('03b-import-oeffnungszeiten');
+  }
   await page.getByRole('button', { name: 'Importieren' }).click();
   await page.waitForSelector('text=Import abgeschlossen');
 

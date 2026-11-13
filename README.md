@@ -149,17 +149,36 @@ Füge einfach zusätzliche Spalten hinzu (Reihenfolge egal):
 | Mo-Do 8-17, Fr 8-13 | | 15 |
 | Mo-Fr 8-12 und 15-18; Mi nachmittag geschlossen | 5 | |
 
+**Die Öffnungszeiten werden beim Import automatisch übernommen** – du musst sie nicht von Hand eintragen.
+Die Import-Vorschau zeigt, bei wie vielen Einträgen das geklappt hat, aus welcher Spalte, und drei Beispiele zum Prüfen.
+
 So darfst du die Öffnungszeiten schreiben – die App versteht viele Varianten:
 
-- Tage: `Mo`, `Di`, `Mi`, `Do`, `Fr`, `Sa`, `So` (auch ausgeschrieben), Bereiche wie `Mo-Fr`, Listen wie `Mo, Di, Do`
-- Zeiten: `8-12`, `08:00-12:00`, `8.30 - 12.30 Uhr`, mehrere mit „und“ oder Komma: `8-12 und 14-18`
+- Tage: `Mo`, `Di`, `Mi`, `Do`, `Fr`, `Sa`, `So` (auch ausgeschrieben oder mit Punkt), Bereiche wie `Mo-Fr` / `Mo.–Fr.`, Listen wie `Mo, Di, Do` oder `Mo/Di/Do`, `wochentags`
+- Zeiten: `8-12`, `08:00-12:00`, `8.30 - 12.30 Uhr`, `8 bis 12 Uhr`, `8h30-12h`, mehrere mit „und“, Komma oder `/`: `8-12 und 14-18`
 - Mehrere Angaben hintereinander: `Mo-Fr 8-12, Mo Di Do 14-18` (vormittags täglich, nachmittags Mo/Di/Do)
-- Ausnahmen: `Mi nachmittag geschlossen`, `Fr geschlossen`
+- **Mittagspause**: `Mo-Fr 8-18, Mittagspause 12-14` → 8–12 und 14–18
+- **Ausnahmen**: `Mi nachmittag geschlossen`, `Fr geschlossen`, `Mo-Fr 8-12 außer Mi`
+- **Mehrere Zeilen in einer Zelle** (Alt+Enter) wie `Montag 8-12 14-18` ⏎ `Dienstag 8-12` – eine Zeile ohne Tag gilt für den Tag davor
 - Tage ohne Angabe gelten als geschlossen. Ohne Tagesangabe (z. B. nur `8-12`) gilt Mo–Fr.
 
-**Alternativ** eine Spalte je Wochentag mit den Überschriften `Mo`, `Di`, `Mi`, `Do`, `Fr` (ggf. `Sa`) und Inhalten wie `8-12, 14-18` oder `geschlossen`.
+**Diese Spalten erkennt die App** (Überschrift egal ob groß/klein, mit oder ohne Punkt):
 
-Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht lesbare Angaben (z. B. „nach Vereinbarung“) zeigt die Import-Vorschau an – die trägst du dann in der App nach (Praxis öffnen → **Öffnungszeiten & Zeitaufwand → Bearbeiten**).
+| Variante | Überschriften (Beispiele) | Inhalt (Beispiel) |
+| --- | --- | --- |
+| Eine Spalte | `Öffnungszeiten`, `Sprechzeiten`, `Sprechstunden`, `Praxiszeiten` | `Mo-Fr 8-12, Mo Di Do 14-18` |
+| Zwei Spalten | `Öffnungszeiten vormittags` + `Öffnungszeiten nachmittags` | `Mo-Fr 8-12` / `Mo Di Do 15-18` |
+| Je Wochentag | `Mo`, `Di`, `Mi` … oder `Montag`, `Öffnungszeiten Montag` | `8-12, 14-18` oder `geschlossen` |
+| Je Wochentag geteilt | `Mo vormittags` + `Mo nachmittags` (auch `Mo VM` / `Mo NM`) | `8-12` / `14-18` |
+| Je Wochentag von/bis | `Montag von`, `Montag bis` (zweites Fenster: `Montag von 2`, `Montag bis 2`) | `08:00` / `12:00` (auch als Excel-Uhrzeit) |
+| Mehrere Tage | `Mo-Fr`, `Mo-Do`, `Sa` | `8-18` |
+| Mittagspause | `Mittagspause` | `12-14` (wird abgezogen) |
+
+Gut zu wissen:
+- Hat Excel aus `8-12` heimlich ein Datum gemacht (Anzeige „08. Dez“), liest die App es trotzdem richtig als 8–12 Uhr.
+- Gibt es **keine** Spalte für Öffnungszeiten, schaut die App in die Spalte **Hinweis** – aber nur, wenn dort ausschließlich Öffnungszeiten stehen (z. B. `Mo-Fr 8-12 Uhr`).
+- **Schon importiert?** Ergänze die Spalte in deiner Excel und importiere die Datei einfach noch einmal: Die Öffnungszeiten kommen dazu, Besuche, Produkte, Pins usw. bleiben erhalten.
+- Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht lesbare Angaben (z. B. „nach Vereinbarung“) zeigt die Import-Vorschau an – die trägst du dann in der App nach (Praxis öffnen → **Öffnungszeiten & Zeitaufwand → Bearbeiten**).
 
 **Parken (Min)** = Zeit für Parkplatzsuche und Fußweg, **Vor Ort (Min)** = Aufenthalt in der Praxis. Leer = Standardwert (einstellbar unter *Mehr → Einstellungen → Tourplanung*, anfangs 5 und 15 Minuten).
 
@@ -259,6 +278,7 @@ src/
   geo/geocoder.ts         Adresssuche (Nominatim) mit Warteschlange, 1 Anfrage/s, Zwischenspeicher
   geo/plz-data.ts         PLZ-Flächen laden, fehlende über Overpass nachladen
   tour/opening-hours.ts   Öffnungszeiten lesen („Mo-Fr 8-12, Mo Di Do 14-18“), anzeigen, abfragen
+  import/hours-import.ts  Öffnungszeiten-Spalten in der Excel erkennen (Text, je Wochentag, von/bis, Pause)
   tour/optimizer.ts       Tour-Optimierung (Zeitfenster, Pause, Feierabend) – reine Rechenlogik
   tour/planner.ts         Tagesplan: Praxen + Öffnungszeiten + Fahrzeiten → Optimierer → Uhrzeiten
   tour/travel.ts          Fahrzeiten/Strecke (OSRM-Routing der FOSSGIS, sonst Schätzung)

@@ -10,6 +10,7 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { STATE_LABEL, stateColor, stateFromText } from '../utils/customer';
 import { plural } from '../utils/text';
+import { formatWeekHours } from '../tour/opening-hours';
 import { findDuplicates } from '../state/duplicates';
 import { duplicateGroups } from '../state/selectors';
 import type { FacilityKind, Practice } from '../types';
@@ -65,8 +66,8 @@ export function importView(): View {
       h('option', { value: '' }, 'automatisch erkennen (Fachrichtung, Typ, Blatt)'),
       KIND_KEYS.map((k) => h('option', { value: k, selected: kindForAll === k }, `alle sind ${KIND_PLURAL[k]}`)),
     );
-    const colRow = (f: Field) =>
-      h('li', { class: preview.columns[f] !== undefined ? 'ok' : 'missing' }, iconEl(preview.columns[f] !== undefined ? 'check' : 'close', 16), FIELD_LABELS[f]);
+    const found = (f: Field) => preview.columns[f] !== undefined || (f === 'hours' && preview.hoursSources.length > 0);
+    const colRow = (f: Field) => h('li', { class: found(f) ? 'ok' : 'missing' }, iconEl(found(f) ? 'check' : 'close', 16), FIELD_LABELS[f]);
 
     setChildren(
       body,
@@ -103,18 +104,7 @@ export function importView(): View {
               h('ul', { class: 'bullets' }, preview.rows.filter((r) => r.needsReview).map((r) => h('li', null, `Zeile ${r.rowNumber}: ${r.name}, ${r.city}`))),
             )
           : null,
-        preview.hoursCount || preview.hoursProblems.length
-          ? h('div', null,
-              h('h3', { class: 'sheet-section' }, 'Öffnungszeiten'),
-              h('p', null, `Bei ${plural(preview.hoursCount, 'Eintrag', 'Einträgen')} erkannt${preview.dayColumns.some((c) => c !== undefined) ? ' (Spalten je Wochentag)' : ''}.`),
-              preview.hoursProblems.length
-                ? h('details', { class: 'details' },
-                    h('summary', null, `Nicht lesbar: ${preview.hoursProblems.length} – bitte später in der App eintragen`),
-                    h('ul', { class: 'bullets' }, preview.hoursProblems.map((x) => h('li', null, `Zeile ${x.rowNumber}: ${x.name} – „${x.text}“`))),
-                  )
-                : null,
-            )
-          : null,
+        hoursPreview(preview),
         preview.duplicateRows.length
           ? h('details', { class: 'details' },
               h('summary', null, `Doppelte Zeilen (gleicher Name + gleiche Adresse): ${preview.duplicateRows.length} – nur einmal übernommen`),
@@ -164,6 +154,41 @@ export function importView(): View {
 
   showStart();
   return { el };
+}
+
+/** Abschnitt „Öffnungszeiten“ der Vorschau: woher, wie viele, Beispiele, Probleme – oder eine Anleitung */
+function hoursPreview(preview: ImportPreview): HTMLElement {
+  const withHours = preview.rows.filter((r) => r.openingHours);
+  const examples = withHours.slice(0, 3);
+  const missing = preview.rows.length - withHours.length - preview.hoursProblems.length;
+  return h(
+    'div',
+    { class: 'hours-preview' },
+    h('h3', { class: 'sheet-section' }, '🕘 Öffnungszeiten'),
+    withHours.length
+      ? [
+          h('div', { class: 'notice notice-ok' }, iconEl('check', 20), h('span', null,
+            h('b', null, `Bei ${withHours.length} von ${preview.rows.length} Einträgen übernommen`),
+            preview.hoursSources.length ? ` – aus ${preview.hoursSources.join(', ')}.` : preview.hoursFromHint ? ' – aus der Spalte „Hinweis“.' : '.',
+          )),
+          h('p', { class: 'muted small' }, 'Zum Prüfen, so hat die App es verstanden:'),
+          h('ul', { class: 'hours-examples' }, examples.map((r) => h('li', null, h('b', null, r.name), h('span', null, formatWeekHours(r.openingHours))))),
+          missing > 0 ? h('p', { class: 'muted small' }, `${plural(missing, 'Eintrag hat', 'Einträge haben')} keine Öffnungszeiten in der Datei – die kannst du später in der App ergänzen.`) : null,
+        ]
+      : preview.hoursProblems.length
+        ? null
+        : h('div', { class: 'notice notice-warn' }, iconEl('info', 20), h('span', null,
+            h('b', null, 'Keine Öffnungszeiten in der Datei gefunden. '),
+            'Damit sie automatisch übernommen werden, füge eine Spalte ', h('b', null, '„Öffnungszeiten“'), ' hinzu, z. B. ',
+            h('code', null, 'Mo-Fr 8-12, Mo Di Do 14-18'), ' – oder je Wochentag eine Spalte ', h('b', null, 'Mo, Di, Mi …'), ' mit z. B. ', h('code', null, '8-12, 14-18'), '. Danach die Datei einfach noch einmal importieren.',
+          )),
+    preview.hoursProblems.length
+      ? h('details', { class: 'details', open: !withHours.length },
+          h('summary', null, `Nicht lesbar: ${preview.hoursProblems.length} – bitte später in der App eintragen`),
+          h('ul', { class: 'bullets' }, preview.hoursProblems.map((x) => h('li', null, `Zeile ${x.rowNumber}: ${x.name} – „${x.text}“`))),
+        )
+      : null,
+  );
 }
 
 function stat(n: number, label: string, kind?: string) {

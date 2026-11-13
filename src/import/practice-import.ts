@@ -16,7 +16,7 @@
  * Bei einem erneuten Import werden vorhandene Praxen aktualisiert (Besuche,
  * Produkte und Pins bleiben erhalten), neue kommen hinzu.
  */
-import { parseDayCell, parseOpeningHours } from '../tour/opening-hours';
+import { detectHoursLayout, readHours, type HoursLayout } from './hours-import';
 import type { FacilityKind, Practice, WeekHours } from '../types';
 import { detectKind, KIND_KEYS, kindOf, type KindSource } from '../utils/kind';
 import { parseInterval } from '../utils/customer';
@@ -56,18 +56,6 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   kind: ['typ', 'art', 'einrichtungsart', 'einrichtungstyp', 'kategorie', 'praxisklinik', 'praxisoderklinik', 'typpraxisklinik'],
 };
 
-/** Spaltenüberschriften für einzelne Wochentage (Index 0 = Montag) */
-const DAY_HEADERS = [
-  ['mo', 'montag'],
-  ['di', 'dienstag'],
-  ['mi', 'mittwoch'],
-  ['do', 'donnerstag'],
-  ['fr', 'freitag'],
-  ['sa', 'samstag'],
-  ['so', 'sonntag'],
-];
-
-/** „Parken (Min.)“ → „parken“ – ohne Leer-/Sonderzeichen und Einheit */
 function compactHeader(raw: string): string {
   return normalize(raw)
     .replace(/[^a-z0-9]/g, '')
@@ -110,6 +98,8 @@ export interface ImportRow {
   openingText?: string;
   /** Öffnungszeiten standen da, waren aber nicht lesbar */
   hoursUnreadable?: boolean;
+  /** Öffnungszeiten stammen aus dem Hinweis */
+  hoursFromHint?: boolean;
   parkMinutes?: number;
   visitMinutes?: number;
   visitIntervalDays?: number;
@@ -130,7 +120,10 @@ export interface ImportPreview {
   headerRowNumber: number;
   columns: Partial<Record<Field, number>>;
   /** Spalten je Wochentag (falls vorhanden) */
-  dayColumns: (number | undefined)[];
+  /** Woher die Öffnungszeiten kommen (für die Vorschau) */
+  hoursSources: string[];
+  /** Öffnungszeiten aus dem Hinweis übernommen (keine eigene Spalte) */
+  hoursFromHint: number;
   missingColumns: Field[];
   rows: ImportRow[];
   skippedRows: number;
@@ -167,13 +160,9 @@ export function detectColumns(header: string[]): Partial<Record<Field, number>> 
   return cols;
 }
 
-/** Findet Spalten „Mo“ … „So“ bzw. „Montag“ … „Sonntag“. */
+/** Erste Spalte je Wochentag („Mo“ … „So“, „Montag“, „Mo vormittags“ …) – siehe hours-import.ts */
 export function detectDayColumns(header: string[]): (number | undefined)[] {
-  const compact = header.map(compactHeader);
-  return DAY_HEADERS.map((names) => {
-    const idx = compact.findIndex((h) => names.includes(h));
-    return idx >= 0 ? idx : undefined;
-  });
+  return detectHoursLayout(header).dayCols.map((cols) => cols[0]?.idx);
 }
 
 /** „15“, „15 min“, „1,5 h“ → Minuten */
@@ -206,7 +195,9 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
   const parts = sheets
     .map((sheet) => {
       const found = findHeader(sheet);
-      return found ? readRows(sheet, found.headerIdx, found.columns, detectDayColumns(found.header)) : null;
+      if (!found) return null;
+      const taken = new Set(Object.entries(found.columns).filter(([f]) => f !== 'hours').map(([, i]) => i as number));
+      return readRows(sheet, found.headerIdx, found.columns, detectHoursLayout(found.header, taken));
     })
     .filter((x): x is ReturnType<typeof readRows> => !!x);
   if (!parts.length) {
@@ -244,7 +235,8 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
     sheetName: firstPart.sheetName,
     headerRowNumber: firstPart.headerRowNumber,
     columns: firstPart.columns,
-    dayColumns: firstPart.dayColumns,
+    hoursSources: [...new Set(parts.flatMap((p) => p.hoursLayout.labels))],
+    hoursFromHint: rows.filter((r) => r.hoursFromHint).length,
     missingColumns: required.filter((f) => firstPart.columns[f] === undefined),
     rows,
     skippedRows: parts.reduce((n, p) => n + p.skipped, 0),
@@ -277,10 +269,9 @@ function readRows(
   sheet: SheetData,
   headerIdx: number,
   columns: Partial<Record<Field, number>>,
-  dayColumns: (number | undefined)[],
+  hoursLayout: HoursLayout,
 ) {
   const usedCols = Object.values(columns) as number[];
-  const hasDayColumns = dayColumns.some((c) => c !== undefined);
   const hoursProblems: ImportPreview['hoursProblems'] = [];
   const rows: ImportRow[] = [];
   let skipped = 0;
@@ -315,31 +306,19 @@ function readRows(
       visitIntervalDays: columns.interval !== undefined ? parseInterval(cells[columns.interval]?.value) : undefined,
     };
 
-    // Öffnungszeiten: eine Textspalte …
-    const hoursText = get('hours');
-    if (hoursText) {
-      const parsed = parseOpeningHours(hoursText);
-      row.openingText = hoursText;
-      if (parsed.hours) row.openingHours = parsed.hours;
-      else {
-        row.hoursUnreadable = true;
-        hoursProblems.push({ rowNumber: row.rowNumber, name, text: hoursText });
-      }
-    } else if (hasDayColumns) {
-      // … oder je Wochentag eine Spalte
-      const days = dayColumns.map((c) => (c !== undefined ? parseDayCell(cellText(cells[c]?.value)) : undefined));
-      if (days.some((d) => d !== undefined)) {
-        row.openingHours = days.map((d) => d ?? []);
-        row.openingText = dayColumns
-          .map((c, i) => (c !== undefined && cellText(cells[c]?.value) ? `${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][i]} ${cellText(cells[c]?.value)}` : ''))
-          .filter(Boolean)
-          .join('; ');
-      }
+    // Öffnungszeiten: Textspalte(n), Spalten je Wochentag oder (ohne eigene Spalte) der Hinweis
+    const hours = readHours(cells, hoursLayout, row.hint);
+    if (hours.text) row.openingText = hours.text;
+    if (hours.hours) row.openingHours = hours.hours;
+    if (hours.fromHint) row.hoursFromHint = true;
+    if (hours.unreadable) {
+      row.hoursUnreadable = true;
+      hoursProblems.push({ rowNumber: row.rowNumber, name, text: hours.unreadable });
     }
     rows.push(row);
   }
 
-  return { sheetName: sheet.name, headerRowNumber: headerIdx + 1, columns, dayColumns, rows, skipped, hoursProblems };
+  return { sheetName: sheet.name, headerRowNumber: headerIdx + 1, columns, hoursLayout, rows, skipped, hoursProblems };
 }
 
 // ---------- Zusammenführen mit vorhandenen Daten ----------
