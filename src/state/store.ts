@@ -8,6 +8,7 @@
 import { getDb } from '../db/database';
 import { DEFAULT_TERRITORY_PLZ } from '../data/territory';
 import type { BackupFile, EventItem, PlzFeature, Practice, Product, Settings, Tour, TourDefaults, Visit } from '../types';
+import { DEFAULT_INTERVALS } from '../utils/customer';
 import { nowIso } from '../utils/id';
 import { mergeRecords } from './duplicates';
 
@@ -28,6 +29,13 @@ export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
   maxVisits: 10,
 };
 
+/**
+ * Wird erhöht, wenn sich die Standard-Intervalle ändern sollen – auch bei
+ * schon gespeicherten Einstellungen (einmalig beim nächsten Start).
+ * 2 = alle 3 Monate (vorher 4 Wochen / 2 Wochen / 3 Monate).
+ */
+export const INTERVAL_DEFAULTS_VERSION = 2;
+
 export const DEFAULT_SETTINGS: Settings = {
   territoryPlz: [...DEFAULT_TERRITORY_PLZ],
   statusColors: {},
@@ -35,7 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backupReminderDays: 7,
   tourDefaults: { ...DEFAULT_TOUR_SETTINGS },
   // Standard-Besuchsintervall in Tagen je Kundenstatus
-  intervalDefaults: { aktiv: 28, prozess: 14, kein: 90 },
+  intervalDefaults: { ...DEFAULT_INTERVALS },
+  intervalDefaultsVersion: INTERVAL_DEFAULTS_VERSION,
 };
 
 /** Gespeicherte Einstellungen mit Standardwerten ergänzen (auch für neue Felder). */
@@ -45,7 +54,12 @@ export function withDefaults(saved: Partial<Settings> | undefined): Settings {
     ...base,
     ...(saved ?? {}),
     tourDefaults: { ...base.tourDefaults, ...(saved?.tourDefaults ?? {}) },
-    intervalDefaults: { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+    // ältere Einstellungen: einmalig auf die neuen Standard-Intervalle umstellen
+    intervalDefaults:
+      (saved?.intervalDefaultsVersion ?? 0) < INTERVAL_DEFAULTS_VERSION
+        ? base.intervalDefaults
+        : { ...base.intervalDefaults, ...(saved?.intervalDefaults ?? {}) },
+    intervalDefaultsVersion: INTERVAL_DEFAULTS_VERSION,
   };
 }
 

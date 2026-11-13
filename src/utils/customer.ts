@@ -33,7 +33,8 @@ export const STATE_COLOR: Record<StateKey, string> = {
   prozess: '#ef8a00', // orange
   kein: '#d64545', // rot
 };
-export const DEFAULT_INTERVALS: Record<StateKey, number> = { aktiv: 28, prozess: 14, kein: 90 };
+/** Standard: alle 3 Monate (91 Tage = 13 Wochen), für jeden Kundenstatus einzeln änderbar */
+export const DEFAULT_INTERVALS: Record<StateKey, number> = { aktiv: 91, prozess: 91, kein: 91 };
 
 /** Status-Text aus der Excel → Kundenstatus (undefined = nicht zuzuordnen) */
 export function stateFromText(text: string): CustomerState | undefined {

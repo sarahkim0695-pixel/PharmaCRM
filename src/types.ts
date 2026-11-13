@@ -136,6 +136,8 @@ export interface Settings {
   activeTourDate?: string;
   /** Standard-Besuchsintervall in Tagen je Kundenstatus */
   intervalDefaults: Record<CustomerState, number>;
+  /** Stand der Standard-Intervalle (zum einmaligen Umstellen, siehe store.ts) */
+  intervalDefaultsVersion?: number;
   /** Paare von Einträgen, die als „verschieden, kein Duplikat“ markiert wurden („idA|idB“) */
   dismissedDuplicates?: string[];
   /** Wurde der Willkommens-Hinweis schon gezeigt? */

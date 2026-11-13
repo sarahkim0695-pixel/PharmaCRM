@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { backupReminder, parseBackup } from '../../src/backup/backup';
 import { resetDbConnection } from '../../src/db/database';
-import { DEFAULT_SETTINGS, store } from '../../src/state/store';
+import { DEFAULT_SETTINGS, store, withDefaults } from '../../src/state/store';
 import type { Practice, Settings } from '../../src/types';
 
 const practice = (id: string, extra: Partial<Practice> = {}): Practice => ({
@@ -96,6 +96,28 @@ describe('Datenspeicher (IndexedDB)', () => {
     expect(() => parseBackup('{"app":"Excel"}')).toThrow(/keine RepMap-Backup-Datei/);
     expect(() => parseBackup('{"app":"RepMap","formatVersion":2}')).toThrow(/neueren RepMap-Version/);
     expect(() => parseBackup('{"app":"RepMap","formatVersion":1,"practices":[]}')).toThrow(/unvollständig/);
+  });
+});
+
+describe('Standard-Besuchsintervall', () => {
+  it('ist für jeden Kundenstatus alle 3 Monate', () => {
+    expect(withDefaults(undefined).intervalDefaults).toEqual({ aktiv: 91, prozess: 91, kein: 91 });
+  });
+  it('stellt ältere gespeicherte Standardwerte einmalig auf 3 Monate um', () => {
+    const old = { backupReminderDays: 7, intervalDefaults: { aktiv: 28, prozess: 14, kein: 90 } } as Partial<Settings>;
+    const s = withDefaults(old);
+    expect(s.intervalDefaults).toEqual({ aktiv: 91, prozess: 91, kein: 91 });
+    expect(s.backupReminderDays).toBe(7);
+  });
+  it('behält danach selbst geänderte Standardwerte', () => {
+    const mine = withDefaults({ ...withDefaults(undefined), intervalDefaults: { aktiv: 28, prozess: 91, kein: 182 } });
+    expect(withDefaults(mine).intervalDefaults).toEqual({ aktiv: 28, prozess: 91, kein: 182 });
+  });
+  it('eigenes Intervall einer Praxis bleibt unberührt', async () => {
+    await store.savePractices([practice('a', { visitIntervalDays: 14 }), practice('b')]);
+    const { intervalOf } = await import('../../src/utils/customer');
+    expect(intervalOf(store.getPractice('a')!, store.settings)).toBe(14);
+    expect(intervalOf(store.getPractice('b')!, store.settings)).toBe(91);
   });
 });
 

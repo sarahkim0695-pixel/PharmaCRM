@@ -93,7 +93,7 @@ In der Praxis-Ansicht änderst du den Status mit einem Tipp. Dieser bleibt erhal
 
 **Besuchsintervall – für jede Praxis kürzer oder länger:**
 - In der Praxis-Ansicht unter „Besuchen alle …“ tippen (1 Woche bis 6 Monate) – oder beim **Bearbeiten** im Feld „Besuchen alle …“.
-- Ohne eigene Wahl gilt der **Standard je Kundenstatus** (*Mehr → Einstellungen*, anfangs: bestellende Kunden alle 4 Wochen, Startlöcher alle 2 Wochen, nicht in Kontakt alle 3 Monate).
+- Ohne eigene Wahl gilt der **Standard je Kundenstatus** – anfangs **alle 3 Monate**. Unter *Mehr → Einstellungen* kannst du den Standard für jeden Kundenstatus getrennt ändern (z. B. bestellende Kunden alle 4 Wochen).
 - **Viele auf einmal:** In der Liste suchen/filtern (z. B. Ort „Augsburg“ oder Status „Startlöcher“) → Stift-Knopf **Mehrere bearbeiten** → Status und/oder Intervall wählen → Übernehmen. Gilt für alle gerade angezeigten Einträge.
 - Die Übersicht **Besuche → Fällig** zeigt, wo ein Besuch fällig oder überfällig ist.
 - **Gelb hinterlegte Zeilen** (auch hellgelb oder goldgelb, ganze Zeile oder einzelne Zelle) werden als **„prüfen“** markiert.
