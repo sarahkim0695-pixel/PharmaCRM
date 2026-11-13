@@ -59,6 +59,12 @@ describe('Doppelte Standorte', () => {
     const m = mergeRecords(keep, [other]);
     expect(m).toMatchObject({ id: 'a', products: { x: 'kauft', y: 'angeboten' }, hint: 'Hinweis A · Hinweis B', phone: '089 1', lat: 48, geoStatus: 'ok', nextAppointment: '2026-11-20', needsReview: true });
   });
+  it('führt Veranstaltungs-Antworten zusammen („Interesse“ gewinnt)', () => {
+    const keep = p('a', { events: { e1: 'kein', e2: 'kein' } });
+    const other = p('b', { events: { e1: 'interesse', e3: 'kein' } });
+    expect(mergeRecords(keep, [other]).events).toEqual({ e1: 'interesse', e2: 'kein', e3: 'kein' });
+    expect(mergeRecords(p('a'), [p('b')]).events).toBeUndefined();
+  });
 });
 
 describe('Zusammenführen im Datenspeicher', () => {

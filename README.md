@@ -9,11 +9,12 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | 🏥 **Kliniken** | Neben Praxen auch Kliniken – eigener Pin (Quadrat mit Kreuz), Filter, Import über Spalte „Typ“ oder eigenes Tabellenblatt. |
 | 🧹 **Doppelte Standorte** | Doppelte Zeilen werden beim Import aussortiert; unklare Fälle (gleiche Adresse/gleicher Name) zum Prüfen und Zusammenführen. |
 | 📋 **Praxen** | Excel-Import (`.xlsx`), automatische Adresssuche, gelb markierte Zeilen erscheinen als **„prüfen“**. Pin von Hand setzen, wenn eine Adresse nicht gefunden wird. |
-| 📍 **Pins** | Farbe nach Status (Kunde = grün, kein Kunde = rot, weitere Status mit eigener Farbe). Antippen: Kurzinfo, Route in Apple Karten, Details. |
-| 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. |
+| 📍 **Pins** | Ampelfarben: grün = bestellender Kunde, orange = in den Startlöchern, rot = nicht in Kontakt. Beim Hineinzoomen einzelne Pins statt Zahlen. Antippen: Kurzinfo, Route in Apple Karten, Details. |
+| 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt, Veranstaltung …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. **Mehrere bearbeiten**: Status oder Intervall für alle angezeigten auf einmal setzen. |
 | 📝 **Besuche** | Besuche mit Datum, Ansprechpartner und Notiz. Nächster Termin. Übersicht „Termine“, „lange nicht besucht“, „Verlauf“. |
 | 📦 **Produkte** | Eigene Produktliste. Pro Praxis: „angeboten“ oder „kauft“. |
-| 🤝 **Kundenstatus & Intervall** | Je Praxis: aktiver Kunde (bestellt), im Gespräch oder kein Kunde – und wie oft besucht werden soll. Die App zeigt, wann ein Besuch fällig ist. |
+| 📣 **Veranstaltungen** | Einmal eintragen – gilt für alle Praxen. Pro Praxis: „noch nicht angefragt“, „kein Interesse“ oder „Interesse“. |
+| 🚦 **Kundenstatus & Intervall** | Ampel je Praxis: 🟢 bestellender Kunde, 🟠 in den Startlöchern, 🔴 nicht in Kontakt – und wie oft besucht werden soll (für jede Praxis kürzer oder länger einstellbar). Die App zeigt, wann ein Besuch fällig ist. |
 | 🕘 **Öffnungszeiten** | Aus der Excel oder in der App: Öffnungszeiten je Wochentag und Zeitaufwand pro Praxis (Parken & Weg, vor Ort). |
 | 🚗 **Tourplanung** | Optimierte Tagestour mit Uhrzeiten: beachtet Öffnungszeiten, Termine, Fahrzeiten, deine Mittagspause und den Feierabend. Region wählen → Tour-Vorschlag; feste Praxen → passende Besuche auf der Strecke. Packliste für den Morgen. |
 | 🛡️ **Backup** | Alle Daten als Datei sichern und wiederherstellen. Erinnerung, wenn ein Backup fällig ist. |
@@ -79,18 +80,22 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 
 #### Kundenstatus
 
-Aus der Spalte **Status** macht die App einen von drei Kundenstatus – die Vorschau zeigt, wie sie jeden Wert zuordnet:
+Aus der Spalte **Status** macht die App eine Ampel – die Vorschau zeigt, wie sie jeden Wert zuordnet:
 
 | In der Excel z. B. | wird zu |
 | --- | --- |
-| Kunde, Stammkunde, bestellt | **Aktiver Kunde** (grün) |
-| Interessent, im Gespräch, Angebot, Muster, Test | **Im Gespräch** (orange) |
-| kein Kunde, inaktiv, abgesagt | **Kein Kunde** (rot) |
-| alles andere | **Status offen** (grau) – in der App antippen |
+| Kunde, Stammkunde, bestellt, aktiv | 🟢 **Bestellender Kunde** |
+| Interessent, im Gespräch, Angebot, Muster, Test, in Kontakt | 🟠 **In den Startlöchern** |
+| kein Kunde, inaktiv, abgesagt, nicht in Kontakt | 🔴 **Nicht in Kontakt** |
+| leer oder unbekannt | 🔴 **Nicht in Kontakt** – in der App mit einem Tipp ändern |
 
-In der Praxis-Ansicht änderst du den Status mit einem Tipp. Dieser bleibt erhalten, auch wenn du die Excel erneut importierst – außer der Status in der Excel hat sich inzwischen geändert.
+In der Praxis-Ansicht änderst du den Status mit einem Tipp. Dieser bleibt erhalten, auch wenn du die Excel erneut importierst – außer der Status in der Excel hat sich inzwischen geändert. Die Farben kannst du unter *Mehr → Einstellungen* anpassen.
 
-**Besuchsintervall:** In der Praxis-Ansicht „Besuchen alle …“ wählen (1 Woche bis 6 Monate) – oder den Standard je Kundenstatus nutzen (*Mehr → Einstellungen*, anfangs: aktiv 4 Wochen, im Gespräch 2 Wochen, kein Kunde 3 Monate, offen 2 Monate). Die Übersicht **Besuche → Fällig** zeigt, wo ein Besuch fällig oder überfällig ist.
+**Besuchsintervall – für jede Praxis kürzer oder länger:**
+- In der Praxis-Ansicht unter „Besuchen alle …“ tippen (1 Woche bis 6 Monate) – oder beim **Bearbeiten** im Feld „Besuchen alle …“.
+- Ohne eigene Wahl gilt der **Standard je Kundenstatus** (*Mehr → Einstellungen*, anfangs: bestellende Kunden alle 4 Wochen, Startlöcher alle 2 Wochen, nicht in Kontakt alle 3 Monate).
+- **Viele auf einmal:** In der Liste suchen/filtern (z. B. Ort „Augsburg“ oder Status „Startlöcher“) → Stift-Knopf **Mehrere bearbeiten** → Status und/oder Intervall wählen → Übernehmen. Gilt für alle gerade angezeigten Einträge.
+- Die Übersicht **Besuche → Fällig** zeigt, wo ein Besuch fällig oder überfällig ist.
 - **Gelb hinterlegte Zeilen** (auch hellgelb oder goldgelb, ganze Zeile oder einzelne Zelle) werden als **„prüfen“** markiert.
   In der Praxis-Ansicht kannst du sie später mit **„Geprüft“** bestätigen.
 - Die Datei muss im Format **.xlsx** sein (in Excel: *Speichern unter → Excel-Arbeitsmappe*).
@@ -141,6 +146,18 @@ Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht le
 
 **Parken (Min)** = Zeit für Parkplatzsuche und Fußweg, **Vor Ort (Min)** = Aufenthalt in der Praxis. Leer = Standardwert (einstellbar unter *Mehr → Einstellungen → Tourplanung*, anfangs 5 und 15 Minuten).
 
+#### Veranstaltungen
+
+**Mehr → Veranstaltungen** → Name (z. B. „Wundforum Augsburg“), Datum und Ort eintragen → **Veranstaltung anlegen**.
+Die Veranstaltung erscheint sofort bei **allen** Praxen und Kliniken. In der Praxis-Ansicht stellst du den Regler auf
+**noch nicht angefragt** · **kein Interesse** · **Interesse**.
+
+- Auf der Seite „Veranstaltungen“ siehst du je Veranstaltung, wie viele Interesse haben, wie viele nicht und wie viele noch nicht angefragt sind.
+  Antippen → **Praxen anzeigen**, z. B. alle „noch nicht angefragt“ als Liste (und auf der Karte).
+- In der **Liste → Filter → Veranstaltung** kannst du ebenfalls danach filtern.
+- In der **Tour** steht bei jedem Besuch vor dem Termin „📣 Noch anfragen: …“, wenn du dort noch nicht gefragt hast.
+- Vorbei? Die Veranstaltung rutscht unter „Vorbei“. Mit **Archiviert** blendest du sie bei den Praxen ganz aus, die Antworten bleiben gespeichert. **Löschen** entfernt sie samt Antworten.
+
 ### Schritt 5: Touren planen
 
 1. Einmalig: **Mehr → Einstellungen → Tourplanung** → deine **Startadresse** eintragen und „Suchen & speichern“. Dort stellst du auch Arbeitszeit, Mittagspause (z. B. 45 Minuten irgendwann zwischen 12 und 14 Uhr) und den Standard-Zeitaufwand ein.
@@ -151,7 +168,7 @@ Leere Zellen überschreiben nichts, was du in der App eingetragen hast. Nicht le
    - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
-5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, aktive Kunden und laufende Gespräche zuerst – und rechnet sie gleich durch.
+5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, Praxen in den Startlöchern und bestellende Kunden zuerst – und rechnet sie gleich durch.
 6. **Feste Praxen + passende Besuche**: 1–2 Praxen auswählen (z. B. ein Termin) und **Passende Besuche ergänzen** tippen. Die App sucht fällige Praxen **auf der Strecke** (wenig Umweg) und **in der Nähe** und plant so viele ein, wie in den Tag passen (höchstens die eingestellte Zahl Besuche). Auch bei einer Wartezeit hilft **Lücke füllen**.
 7. **Packliste**: Unter „Packliste & Notizen“ trägst du ein, was du an diesem Tag allgemein brauchst, und bei jeder Praxis unter „Mitbringen“ (🎒), was du dort mitbringen willst – z. B. „Muster A, Katalog“. Daraus entsteht automatisch eine Liste zum Abhaken; gleiche Dinge erscheinen nur einmal mit allen Praxen dazu.
 8. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
@@ -230,7 +247,8 @@ src/
   geo/osm.ts              Overpass-Antwort → GeoJSON (Ringe zusammensetzen, nur Deutschland)
   map/map-view.ts         Karte: Gebiet, Pins, Bedienelemente, Gebiet bearbeiten, Pin setzen
   map/popup.ts            Kurzinfo beim Antippen eines Pins
-  views/                  Seiten (Liste, Detail, Formulare, Besuche, Produkte, Backup, Mehr …)
+  views/                  Seiten (Liste, Detail, Formulare, Besuche, Produkte, Veranstaltungen, Backup, Mehr …)
+  utils/customer.ts       Ampel-Kundenstatus, Farben, Besuchsintervall, Fälligkeit
   backup/backup.ts        Export/Import der Backup-Datei, Erinnerungslogik
   ui/                     Kleine UI-Bausteine (h(), Dialoge, Meldungen, Symbole)
   utils/                  Text-, Datums-, Farb- und Link-Hilfen
@@ -239,14 +257,14 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 
 ### Erweitern – typische Aufgaben
 
 - **Neue Seite:** Route in `src/router.ts` eintragen, View-Funktion in `src/views/` schreiben (liefert `{ el, destroy }`), in `PAGES` in `src/app.ts` registrieren.
-- **Neuer Abschnitt in der Praxis-Detailansicht:** Funktion `(p: Practice) => HTMLElement` schreiben und mit `registerDetailSection()` in `src/app.ts` anmelden (siehe `visits-section.ts`, `products-view.ts`).
+- **Neuer Abschnitt in der Praxis-Detailansicht:** Funktion `(p: Practice) => HTMLElement` schreiben und mit `registerDetailSection()` in `src/app.ts` anmelden (siehe `visits-section.ts`, `products-view.ts`, `events-view.ts`).
 - **Neues Feld an der Praxis:** in `src/types.ts` ergänzen (optional machen, damit alte Daten/Backups gültig bleiben), Formular in `practice-form.ts`, ggf. Import in `practice-import.ts`.
 - **Neuer Filter:** `PracticeFilter`, `matchesFilter()` und `activeFilterCount()` in `src/state/filters.ts`, Bedienelement in `openFilterSheet()` (`list-view.ts`).
 - **Start-Gebiet vorbelegen:** PLZ in `src/data/territory.ts` eintragen (gilt nur für den allerersten Start).

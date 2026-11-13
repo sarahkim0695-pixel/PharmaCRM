@@ -17,7 +17,7 @@ import { KIND_LABEL, kindOf } from '../utils/kind';
  * Weitere Abschnitte (Termine, Besuche, Produkte) melden sich hier an,
  * damit diese Datei übersichtlich bleibt. Siehe visits-section.ts / products-section.ts.
  */
-export type DetailSection = (p: Practice) => Child;
+export type DetailSection = (p: Practice) => Child | null;
 const extraSections: DetailSection[] = [];
 export function registerDetailSection(fn: DetailSection): void {
   extraSections.push(fn);

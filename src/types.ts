@@ -11,8 +11,23 @@ export type GeoStatus =
   | 'not_found' // nicht gefunden – Pin bitte von Hand setzen
   | 'manual'; // Pin wurde von Hand gesetzt
 
-/** Kundenstatus: aktiver Kunde (bestellt), im Gespräch (auf dem Weg zum Kunden), kein Kunde */
+/** Kundenstatus (Ampel): aktiv = bestellender Kunde (grün), prozess = in den Startlöchern (orange), kein = nicht in Kontakt (rot) */
 export type CustomerState = 'aktiv' | 'prozess' | 'kein';
+
+/** Interesse an einer Veranstaltung (fehlt = noch nicht angefragt) */
+export type EventInterest = 'interesse' | 'kein';
+
+/** Veranstaltung (z. B. Fortbildung, Messe, Praxis-Event) – gilt für alle Praxen */
+export interface EventItem {
+  id: string;
+  name: string;
+  date?: string; // „YYYY-MM-DD“
+  place: string;
+  note: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** Art der Einrichtung */
 export type FacilityKind = 'praxis' | 'klinik';
@@ -50,6 +65,8 @@ export interface Practice {
   nextAppointmentNote?: string;
   /** Produkt-ID → Zustand */
   products: Record<string, ProductState>;
+  /** Veranstaltungs-ID → Interesse (fehlt = noch nicht angefragt) */
+  events?: Record<string, EventInterest>;
   /** Öffnungszeiten (undefined = unbekannt) */
   openingHours?: WeekHours;
   /** Öffnungszeiten als Text, wie in Excel/Schnelleingabe geschrieben */
@@ -118,7 +135,7 @@ export interface Settings {
   /** Datum der Tour, die gerade geplant wird (für „Zur Tour hinzufügen“) */
   activeTourDate?: string;
   /** Standard-Besuchsintervall in Tagen je Kundenstatus */
-  intervalDefaults: Record<CustomerState | 'offen', number>;
+  intervalDefaults: Record<CustomerState, number>;
   /** Paare von Einträgen, die als „verschieden, kein Duplikat“ markiert wurden („idA|idB“) */
   dismissedDuplicates?: string[];
   /** Wurde der Willkommens-Hinweis schon gezeigt? */
@@ -232,4 +249,5 @@ export interface BackupFile {
   settings: Settings;
   extraPlzShapes: PlzFeature[];
   tours?: Tour[];
+  events?: EventItem[];
 }

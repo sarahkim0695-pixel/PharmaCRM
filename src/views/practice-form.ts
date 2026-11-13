@@ -7,7 +7,7 @@ import { store } from '../state/store';
 import type { FacilityKind, Practice } from '../types';
 import { h, setChildren } from '../ui/dom';
 import { KIND_LABEL } from '../utils/kind';
-import { STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
+import { formatInterval, INTERVAL_CHOICES, STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { toast } from '../ui/toast';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -42,17 +42,25 @@ export function practiceFormView(route: Route): View {
   const street = input('street', p.street, { placeholder: 'Straße und Hausnummer' });
   const plz = input('plz', p.plz, { inputmode: 'numeric', maxlength: 5, pattern: '\\d{5}', placeholder: '80331' });
   const city = input('city', p.city, { placeholder: 'Ort' });
-  // Kundenstatus: aktiv / im Gespräch / kein Kunde (oder offen)
+  // Kundenstatus (Ampel): bestellend / Startlöcher / nicht in Kontakt
   let state: StateKey = isNew ? 'kein' : stateKeyOf(p as Practice);
   const stateSeg = h('div', { class: 'segmented' });
   const renderState = () =>
     setChildren(
       stateSeg,
       STATE_KEYS.map((k) =>
-        h('button', { type: 'button', class: ['seg', state === k && 'on'], onclick: () => { state = k; renderState(); } }, k === 'offen' ? 'offen' : STATE_LABEL[k]),
+        h('button', { type: 'button', class: ['seg', state === k && 'on'], onclick: () => { state = k; renderState(); } }, STATE_LABEL[k]),
       ),
     );
   renderState();
+  // Besuchsintervall: Standard oder eigener Wert
+  const intervalChoices = [...new Set([...INTERVAL_CHOICES, ...(p.visitIntervalDays ? [p.visitIntervalDays] : [])])].sort((a, b) => a - b);
+  const intervalSel = h(
+    'select',
+    { name: 'interval' },
+    h('option', { value: '' }, 'Standard (je Kundenstatus)'),
+    intervalChoices.map((d) => h('option', { value: String(d), selected: p.visitIntervalDays === d }, formatInterval(d))),
+  );
   const phone = input('phone', p.phone, { type: 'tel', placeholder: 'optional' });
   const hint = h('textarea', { name: 'hint', rows: 3, placeholder: 'optional' }, p.hint ?? '');
   const review = h('input', { type: 'checkbox', class: 'switch', checked: !!p.needsReview });
@@ -75,6 +83,7 @@ export function practiceFormView(route: Route): View {
     field('Straße', street),
     h('div', { class: 'grid-2' }, field('PLZ', plz), field('Ort', city)),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Kundenstatus'), stateSeg),
+    field('Besuchen alle …', intervalSel, 'Standard je Kundenstatus unter Mehr → Einstellungen'),
     field('Telefon', phone),
     field('Hinweis', hint),
     h('label', { class: 'switch-row' }, h('span', null, 'Als „prüfen“ markieren'), review),
@@ -115,7 +124,8 @@ export function practiceFormView(route: Route): View {
       plz: plzVal,
       city: city.value.trim(),
       status: p.status ?? '',
-      customerState: state === 'offen' ? undefined : state,
+      customerState: state,
+      visitIntervalDays: intervalSel.value ? Number(intervalSel.value) : undefined,
       phone: phone.value.trim(),
       hint: hint.value.trim(),
       needsReview: review.checked,

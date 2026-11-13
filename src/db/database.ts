@@ -9,11 +9,12 @@
  *  - plzShapes     nachgeladene PLZ-Flächen, die nicht in der mitgelieferten Datei sind
  *  - geocodeCache  Ergebnisse der Adresssuche (spart Anfragen bei erneutem Import)
  *  - tours         geplante Touren (eine pro Tag, ab Version 2)
+ *  - events        Veranstaltungen (ab Version 3)
  *
  * Bei Änderungen am Aufbau: DB_VERSION erhöhen und in `upgrade` ergänzen.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { GeocodeCacheEntry, PlzFeature, Practice, Product, Tour, Visit } from '../types';
+import type { EventItem, GeocodeCacheEntry, PlzFeature, Practice, Product, Tour, Visit } from '../types';
 
 export interface RepMapDB extends DBSchema {
   practices: { key: string; value: Practice };
@@ -23,12 +24,13 @@ export interface RepMapDB extends DBSchema {
   plzShapes: { key: string; value: PlzFeature };
   geocodeCache: { key: string; value: GeocodeCacheEntry };
   tours: { key: string; value: Tour };
+  events: { key: string; value: EventItem };
 }
 
-export type StoreName = 'practices' | 'visits' | 'products' | 'meta' | 'plzShapes' | 'geocodeCache' | 'tours';
+export type StoreName = 'practices' | 'visits' | 'products' | 'meta' | 'plzShapes' | 'geocodeCache' | 'tours' | 'events';
 
 export const DB_NAME = 'repmap';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<RepMapDB>> | null = null;
 
@@ -47,6 +49,9 @@ export function getDb(): Promise<IDBPDatabase<RepMapDB>> {
         }
         if (oldVersion < 2) {
           db.createObjectStore('tours', { keyPath: 'id' });
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore('events', { keyPath: 'id' });
         }
       },
       blocked() {

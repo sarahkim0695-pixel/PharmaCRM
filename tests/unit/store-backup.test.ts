@@ -61,6 +61,36 @@ describe('Datenspeicher (IndexedDB)', () => {
     expect(store.settings.lastBackupAt).toBeTruthy();
   });
 
+  it('Veranstaltungen: gelten für alle Praxen, Löschen entfernt die Angaben, Backup enthält sie', async () => {
+    const ev = { id: 'e1', name: 'Wundforum', date: '2026-12-03', place: 'Augsburg', note: '', archived: false, createdAt: '', updatedAt: '' };
+    await store.saveEvent(ev);
+    await store.saveEvent({ ...ev, id: 'e2', name: 'Alt', archived: true });
+    await store.savePractices([practice('a', { events: { e1: 'interesse' } }), practice('b', { events: { e1: 'kein', e2: 'interesse' } })]);
+    expect(store.eventList().map((e) => e.id)).toEqual(['e1']);
+    expect(store.eventList(true).map((e) => e.name)).toEqual(['Alt', 'Wundforum']); // Datum, dann Name
+
+    const json = JSON.stringify(store.toBackup());
+    await store.clearAll();
+    expect(store.events.size).toBe(0);
+    await store.restoreBackup(parseBackup(json));
+    expect(store.events.get('e1')?.place).toBe('Augsburg');
+    expect(store.getPractice('b')?.events).toEqual({ e1: 'kein', e2: 'interesse' });
+
+    await resetDbConnection();
+    await store.load();
+    expect(store.events.size).toBe(2);
+
+    await store.deleteEvent('e1');
+    expect(store.events.has('e1')).toBe(false);
+    expect(store.getPractice('a')?.events).toEqual({});
+    expect(store.getPractice('b')?.events).toEqual({ e2: 'interesse' });
+  });
+
+  it('ältere Backups ohne Veranstaltungen lassen sich weiter einlesen', () => {
+    const b = parseBackup(JSON.stringify({ app: 'RepMap', formatVersion: 1, practices: [], visits: [], products: [] }));
+    expect(b.events).toEqual([]);
+  });
+
   it('lehnt fremde oder kaputte Dateien verständlich ab', () => {
     expect(() => parseBackup('kein json')).toThrow(/kein JSON/);
     expect(() => parseBackup('{"app":"Excel"}')).toThrow(/keine RepMap-Backup-Datei/);

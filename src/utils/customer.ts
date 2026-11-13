@@ -1,9 +1,12 @@
 /**
  * Kundenstatus und Besuchsintervall.
  *
- * Kundenstatus: „Aktiver Kunde“ (bestellt), „Im Gespräch“ (auf dem Weg zum Kunden),
- * „Kein Kunde“. In der App gesetzt oder aus dem Status-Text der Excel abgeleitet
- * („Kunde“, „Interessent“, „kein Kunde“ …). Ohne Zuordnung: „Status offen“.
+ * Kundenstatus als Ampel:
+ *   grün   = Bestellender Kunde
+ *   orange = In den Startlöchern (Gespräche laufen)
+ *   rot    = Nicht in Kontakt
+ * In der App gesetzt oder aus dem Status-Text der Excel abgeleitet
+ * („Kunde“, „Interessent“, „kein Kunde“ …). Ohne/unbekannter Status = rot.
  *
  * Besuchsintervall: je Praxis einstellbar, sonst Standard je Kundenstatus.
  * Daraus ergibt sich, wann der nächste Besuch fällig ist.
@@ -12,28 +15,25 @@ import type { CustomerState, Practice, Settings } from '../types';
 import { daysSince } from './dates';
 import { normalize } from './text';
 
-export type StateKey = CustomerState | 'offen';
-export const STATE_KEYS: StateKey[] = ['aktiv', 'prozess', 'kein', 'offen'];
+export type StateKey = CustomerState;
+export const STATE_KEYS: StateKey[] = ['aktiv', 'prozess', 'kein'];
 
 export const STATE_LABEL: Record<StateKey, string> = {
-  aktiv: 'Aktiver Kunde',
-  prozess: 'Im Gespräch',
-  kein: 'Kein Kunde',
-  offen: 'Status offen',
+  aktiv: 'Bestellender Kunde',
+  prozess: 'In den Startlöchern',
+  kein: 'Nicht in Kontakt',
 };
 export const STATE_HINT: Record<StateKey, string> = {
   aktiv: 'bestellt',
-  prozess: 'auf dem Weg zum Kunden',
-  kein: '',
-  offen: '',
+  prozess: 'Gespräche laufen',
+  kein: 'noch kein Kontakt',
 };
 export const STATE_COLOR: Record<StateKey, string> = {
   aktiv: '#1f9d55', // grün
-  prozess: '#e07b00', // orange
+  prozess: '#ef8a00', // orange
   kein: '#d64545', // rot
-  offen: '#8a94a6', // grau
 };
-export const DEFAULT_INTERVALS: Record<StateKey, number> = { aktiv: 28, prozess: 14, kein: 90, offen: 60 };
+export const DEFAULT_INTERVALS: Record<StateKey, number> = { aktiv: 28, prozess: 14, kein: 90 };
 
 /** Status-Text aus der Excel → Kundenstatus (undefined = nicht zuzuordnen) */
 export function stateFromText(text: string): CustomerState | undefined {
@@ -51,7 +51,7 @@ export function stateOf(p: Pick<Practice, 'customerState' | 'status'>): Customer
 }
 
 export function stateKeyOf(p: Pick<Practice, 'customerState' | 'status'>): StateKey {
-  return stateOf(p) ?? 'offen';
+  return stateOf(p) ?? 'kein'; // ohne/unbekannter Status = nicht in Kontakt
 }
 
 export function stateColor(key: StateKey, settings?: Pick<Settings, 'statusColors'>): string {

@@ -371,6 +371,7 @@ button.stat:disabled { opacity: 0.6; }
 .searchbox input { border: none !important; outline: none !important; padding-left: 0; }
 .list-tools .row { flex-wrap: nowrap; }
 .filter-btn { flex: none; }
+@media (max-width: 600px) { .hide-narrow { display: none; } }
 .sort-select { flex: 1; min-width: 0; }
 .list-count { color: var(--muted); font-size: 14px; margin: 6px 2px; }
 .plist { list-style: none; margin: 0; padding: 0; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -655,6 +656,15 @@ button.stat:disabled { opacity: 0.6; }
 .due-soon { background: #fff8d2; color: #5c4700; }
 .due-over { background: #fff0e0; color: #8a4700; }
 .due-never { background: #f1f3f6; color: var(--muted); }
+
+/* ---------- Veranstaltungen ---------- */
+
+.event-states li { align-items: center; }
+.segmented-event { flex: 0 1 430px; }
+.seg-ev-interesse.on { background: var(--ok); color: #fff; }
+.seg-ev-kein.on { background: var(--danger); color: #fff; }
+.seg-ev-offen.on { background: #fff; color: var(--text); }
+.tl-ask { font-size: 14px; color: var(--primary-dark); margin-top: 4px; font-weight: 600; }
 
 /* ---------- Menü ---------- */
 

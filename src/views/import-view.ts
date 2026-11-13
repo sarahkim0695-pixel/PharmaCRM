@@ -81,7 +81,7 @@ export function importView(): View {
           'div',
           { class: 'badges' },
           [...preview.statusCounts].map(([s, n]) =>
-            h('span', { class: 'badge', style: { '--badge': stateColor(stateFromText(s) ?? 'offen', store.settings) } }, `${s || 'ohne Status'} → ${STATE_LABEL[stateFromText(s) ?? 'offen']}: ${n}`),
+            h('span', { class: 'badge', style: { '--badge': stateColor(stateFromText(s) ?? 'kein', store.settings) } }, `${s || 'ohne Status'} → ${STATE_LABEL[stateFromText(s) ?? 'kein']}: ${n}`),
           ),
         ),
         preview.reviewCount

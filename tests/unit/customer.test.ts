@@ -11,7 +11,7 @@ import {
   stateKeyOf,
 } from '../../src/utils/customer';
 
-const settings = { intervalDefaults: { aktiv: 28, prozess: 14, kein: 90, offen: 60 }, statusColors: {} };
+const settings = { intervalDefaults: { aktiv: 28, prozess: 14, kein: 90 }, statusColors: {} };
 
 describe('Kundenstatus', () => {
   it('leitet den Status aus dem Excel-Text ab', () => {
@@ -31,8 +31,11 @@ describe('Kundenstatus', () => {
   it('in der App gesetzter Status hat Vorrang', () => {
     expect(stateKeyOf({ status: 'Kunde' })).toBe('aktiv');
     expect(stateKeyOf({ status: 'Kunde', customerState: 'kein' })).toBe('kein');
-    expect(stateKeyOf({ status: 'irgendwas' })).toBe('offen');
-    expect(practiceColor({ status: 'Interessent' })).toBe('#e07b00');
+    expect(stateKeyOf({ status: 'irgendwas' })).toBe('kein'); // unbekannt → rot
+    expect(stateKeyOf({ status: '' })).toBe('kein');
+    expect(practiceColor({ status: 'Interessent' })).toBe('#ef8a00'); // orange
+    expect(practiceColor({ status: 'Kunde' })).toBe('#1f9d55'); // grün
+    expect(practiceColor({ status: 'kein Kunde' })).toBe('#d64545'); // rot
     expect(practiceColor({ status: 'Kunde' }, { statusColors: { aktiv: '#000000' } })).toBe('#000000');
   });
 });

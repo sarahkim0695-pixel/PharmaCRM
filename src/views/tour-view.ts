@@ -17,6 +17,7 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { dueInfo, dueText, practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
 import { packingList } from '../tour/packing';
+import { eventsToAsk } from './events-view';
 import { formatDateShort, parseDate, todayStr } from '../utils/dates';
 import { appleMapsUrl } from '../utils/maps';
 import { collator, normalize, plural } from '../utils/text';
@@ -340,7 +341,7 @@ export function tourView(route: Route): View {
       h(
         'p',
         { class: 'muted small' },
-        '„Passende Besuche ergänzen“ sucht fällige Praxen auf der Strecke zu deinen gewählten Praxen oder in ihrer Nähe – aktive Kunden und laufende Gespräche zuerst. Was zeitlich nicht passt, fliegt beim Berechnen wieder raus.',
+        '„Passende Besuche ergänzen“ sucht fällige Praxen auf der Strecke zu deinen gewählten Praxen oder in ihrer Nähe – Praxen in den Startlöchern und bestellende Kunden zuerst. Was zeitlich nicht passt, fliegt beim Berechnen wieder raus.',
       ),
     );
   }
@@ -350,7 +351,7 @@ export function tourView(route: Route): View {
     const setRegion = (cities: string[], radiusKm = r.radiusKm) => change((t) => (t.region = cities.length ? { cities, radiusKm } : undefined));
     return section(
       'Wohin? (optional)',
-      h('p', { class: 'muted small' }, 'Ort oder Region wählen – die App stellt eine passende Tour zusammen (fällige Besuche, aktive Kunden und laufende Gespräche zuerst).'),
+      h('p', { class: 'muted small' }, 'Ort oder Region wählen – die App stellt eine passende Tour zusammen (fällige Besuche, Startlöcher und bestellende Kunden zuerst).'),
       h(
         'div',
         { class: 'chips region-chips' },
@@ -507,6 +508,10 @@ export function tourView(route: Route): View {
             (() => {
               const bring = tour.stops.find((x) => x.practiceId === p.id)?.bring;
               return bring ? h('div', { class: 'tl-bring' }, `🎒 Mitbringen: ${bring}`) : null;
+            })(),
+            (() => {
+              const ask = eventsToAsk(p, date);
+              return ask.length ? h('div', { class: 'tl-ask' }, `📣 Noch anfragen: ${ask.map((x) => x.name).join(', ')}`) : null;
             })(),
             e.wait > 0
               ? h('div', { class: ['tl-wait', e.wait >= 30 && 'big'] }, `⏳ ${e.wait} min warten`, e.wait >= 30 ? h('button', { class: 'btn btn-sm', disabled: busy, onclick: () => void addSuggestions() }, 'Lücke füllen') : null)
