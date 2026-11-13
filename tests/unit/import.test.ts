@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { mergeImport, parsePracticeSheets, detectColumns, detectDayColumns, newPracticeFromRow, parseMinutes } from '../../src/import/practice-import';
+import { countKinds, mergeImport, parsePracticeSheets, detectColumns, detectDayColumns, newPracticeFromRow, parseMinutes, withKind } from '../../src/import/practice-import';
+import { kindOf } from '../../src/utils/kind';
 import { formatWeekHours } from '../../src/tour/opening-hours';
 import { applyTint, columnIndex, isYellow, readXlsx } from '../../src/import/xlsx-reader';
 
@@ -57,7 +58,7 @@ describe('Praxis-Import', () => {
     expect(preview.headerRowNumber).toBe(3);
     expect(preview.missingColumns).toEqual([]);
     expect(preview.rows).toHaveLength(11); // 9 Praxen + 2 Kliniken, doppelte Zeile aussortiert
-    expect(preview.kindCounts).toEqual({ praxis: 9, klinik: 2 });
+    expect(preview.kindCounts).toEqual({ ortho: 5, hausarzt: 2, zahn: 2, klinik: 2 });
     expect(preview.duplicateRows).toEqual([{ sheetName: 'Gebiet', rowNumber: 13, name: 'Chirurgie Ingolstadt', sameAsRow: 9 }]);
     expect(preview.rows.find((r) => r.name === 'Chirurgie Ingolstadt')?.hint).toBe('Zeile doppelt in der Liste');
     expect(preview.sheets.map((x) => [x.name, x.rowCount])).toEqual([['Gebiet', 10], ['Kliniken', 2]]);
@@ -103,7 +104,7 @@ describe('Praxis-Import', () => {
   });
 
   it('legt neue Praxen mit Status „pending“ an', () => {
-    const p = newPracticeFromRow({ rowNumber: 2, kind: 'praxis', name: 'A', specialty: '', street: 'X 1', plz: '80331', city: 'München', status: 'Kunde', hint: '', phone: '', needsReview: true });
+    const p = newPracticeFromRow({ rowNumber: 2, kind: 'ortho', name: 'A', specialty: '', street: 'X 1', plz: '80331', city: 'München', status: 'Kunde', hint: '', phone: '', needsReview: true });
     expect(p).toMatchObject({ geoStatus: 'pending', needsReview: true, source: 'import', products: {} });
   });
 });
@@ -157,6 +158,31 @@ describe('Kliniken im Import', () => {
     // Nur die Klinikliste erneut importieren → keine Praxen als „fehlt in der Datei“
     const onlyClinics = preview.rows.filter((r) => r.kind === 'klinik');
     expect(mergeImport(existing, onlyClinics).notInFile).toEqual([]);
+  });
+
+  it('Gruppe für die ganze Datei wählen („alle sind Hausärzte“)', () => {
+    const preview = parsePracticeSheets(readXlsx(fixture));
+    const rows = withKind(preview.rows.filter((r) => r.kind !== 'klinik'), 'hausarzt');
+    expect(countKinds(rows)).toEqual({ ortho: 0, hausarzt: 9, zahn: 0, klinik: 0 });
+    const saved = mergeImport([], rows).toSave;
+    expect(saved.every((p) => p.kind === 'hausarzt')).toBe(true);
+    // erneuter Import mit automatischer Erkennung ändert die gewählte Gruppe nicht
+    const again = mergeImport(saved, preview.rows.filter((r) => r.kind !== 'klinik'));
+    expect(again.toSave.filter((p) => p.kind !== 'hausarzt')).toEqual([]);
+  });
+
+  it('speichert die Gruppe nur bei eindeutiger Angabe, sonst folgt sie der Fachrichtung', () => {
+    const preview = parsePracticeSheets(readXlsx(fixture));
+    const saved = mergeImport([], preview.rows).toSave;
+    const allgaeu = saved.find((p) => p.name === 'Praxis Allgäu')!;
+    expect(allgaeu.kind).toBeUndefined(); // aus „Kieferorthopädie“
+    expect(kindOf(allgaeu)).toBe('zahn');
+    expect(saved.find((p) => p.name === 'Klinik am Rathaus')!.kind).toBe('klinik');
+    // alter Wert „praxis“ wird beim nächsten Import entfernt → Gruppe aus der Fachrichtung
+    const legacy = saved.map((p) => (p.kind ? p : { ...p, kind: 'praxis' as const }));
+    const res = mergeImport(legacy, preview.rows);
+    expect(res.toSave.some((p) => p.kind === 'praxis')).toBe(false);
+    expect(kindOf(res.toSave.find((p) => p.name === 'Hausarztpraxis Muster')!)).toBe('hausarzt');
   });
 
   it('überschreibt eine in der App gesetzte Art nicht ohne eindeutige Angabe', () => {

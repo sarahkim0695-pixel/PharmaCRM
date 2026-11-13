@@ -3,7 +3,7 @@ import { allPairs, coreName, findDuplicates, mergeRecords } from '../../src/stat
 import { store } from '../../src/state/store';
 import { newTour } from '../../src/tour/planner';
 import type { Practice } from '../../src/types';
-import { detectKind } from '../../src/utils/kind';
+import { detectKind, kindOf } from '../../src/utils/kind';
 
 const p = (id: string, o: Partial<Practice> = {}): Practice => ({
   id, name: `Praxis ${id}`, specialty: '', street: `Weg ${id}`, plz: '80331', city: 'München', status: 'Kunde', hint: '', phone: '',
@@ -14,11 +14,43 @@ const ids = (groups: ReturnType<typeof findDuplicates>) => groups.map((g) => g.p
 describe('Kliniken erkennen', () => {
   it('über Spalte, Tabellenblatt oder Name', () => {
     expect(detectKind('Dr. Muster', 'Klinik').kind).toBe('klinik');
-    expect(detectKind('Klinikum Nord', 'Praxis').kind).toBe('praxis'); // Spalte gewinnt
+    expect(detectKind('Klinikum Nord', 'Praxis').kind).toBe('ortho'); // Spalte „Praxis“ gewinnt
     expect(detectKind('Dr. Muster', '', 'Kliniken')).toEqual({ kind: 'klinik', source: 'sheet' });
     expect(detectKind('Kreisklinik Ebersberg')).toEqual({ kind: 'klinik', source: 'name' });
     expect(detectKind('Krankenhaus Agatharied').kind).toBe('klinik');
-    expect(detectKind('Praxis Dr. Muster')).toEqual({ kind: 'praxis', source: 'default' });
+    expect(detectKind('Praxis Dr. Muster')).toEqual({ kind: 'ortho', source: 'default' });
+  });
+});
+
+describe('Gruppen erkennen (Orthopäden, Hausärzte, Zahnärzte & KFO, Kliniken)', () => {
+  it('über die Fachrichtung', () => {
+    expect(detectKind('Dr. A', '', 'Gebiet', 'Allgemeinmedizin')).toEqual({ kind: 'hausarzt', source: 'specialty' });
+    expect(detectKind('Dr. A', '', '', 'Innere Medizin')).toMatchObject({ kind: 'hausarzt' });
+    expect(detectKind('Dr. A', '', '', 'Praktischer Arzt')).toMatchObject({ kind: 'hausarzt' });
+    expect(detectKind('Dr. A', '', '', 'Zahnmedizin')).toMatchObject({ kind: 'zahn' });
+    expect(detectKind('Dr. A', '', '', 'Kieferorthopädie')).toMatchObject({ kind: 'zahn' }); // nicht Orthopädie!
+    expect(detectKind('Dr. A', '', '', 'Mund-, Kiefer- und Gesichtschirurgie')).toMatchObject({ kind: 'zahn' });
+    expect(detectKind('Dr. A', '', '', 'Orthopädie und Unfallchirurgie')).toEqual({ kind: 'ortho', source: 'specialty' });
+    expect(detectKind('Dr. A', '', '', 'Urologie')).toEqual({ kind: 'ortho', source: 'default' });
+  });
+  it('über Spalte „Typ“, Tabellenblatt und Name', () => {
+    expect(detectKind('Dr. A', 'Hausarzt', '', 'Orthopädie')).toEqual({ kind: 'hausarzt', source: 'column' });
+    expect(detectKind('Dr. A', 'KFO')).toMatchObject({ kind: 'zahn', source: 'column' });
+    expect(detectKind('Dr. A', '', 'Hausärzte')).toEqual({ kind: 'hausarzt', source: 'sheet' });
+    expect(detectKind('Dr. A', '', 'Zahnärzte & KFO')).toEqual({ kind: 'zahn', source: 'sheet' });
+    expect(detectKind('Dr. A', '', 'Orthopäden', 'Allgemeinmedizin')).toEqual({ kind: 'ortho', source: 'sheet' });
+    expect(detectKind('Zahnarztpraxis Lächeln')).toEqual({ kind: 'zahn', source: 'name' });
+    expect(detectKind('Hausarztpraxis Muster', '', 'Gebiet', '')).toEqual({ kind: 'hausarzt', source: 'name' });
+  });
+  it('alte Daten („praxis“ oder ohne Angabe) über Fachrichtung und Name', () => {
+    expect(kindOf({ kind: 'praxis', specialty: 'Allgemeinmedizin', name: 'Dr. A' })).toBe('hausarzt');
+    expect(kindOf({ kind: 'praxis', specialty: 'Orthopädie', name: 'Dr. A' })).toBe('ortho');
+    expect(kindOf({ kind: 'praxis', specialty: '', name: 'Praxis an der Klinik' })).toBe('ortho'); // bewusst als Praxis gewählt
+    expect(kindOf({ kind: undefined, specialty: '', name: 'Kreisklinik' })).toBe('klinik');
+    expect(kindOf({ kind: undefined, specialty: 'Kieferorthopädie', name: 'Dr. B' })).toBe('zahn');
+    expect(kindOf({ kind: 'klinik', specialty: 'Allgemeinmedizin', name: 'X' })).toBe('klinik');
+    expect(kindOf({ kind: 'zahn', specialty: 'Orthopädie', name: 'X' })).toBe('zahn'); // in der App gewählt
+    expect(kindOf({})).toBe('ortho');
   });
 });
 

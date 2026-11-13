@@ -1,7 +1,7 @@
 /** Tabelle/Liste aller Praxen mit Suche, Filter und Sortierung. */
 import { navigate, type Route } from '../router';
 import { activeFilterCount, filterState, SORT_LABELS, type SortKey } from '../state/filters';
-import { distinctValues, listPractices, statusOptions } from '../state/selectors';
+import { distinctValues, kindCounts, listPractices, statusOptions } from '../state/selectors';
 import { store } from '../state/store';
 import type { Practice } from '../types';
 import { confirmDialog, openSheet } from '../ui/dialog';
@@ -11,7 +11,7 @@ import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { dueInfo, formatInterval, INTERVAL_CHOICES, practiceColor, STATE_KEYS, STATE_LABEL, stateColor, stateKeyOf, type StateKey } from '../utils/customer';
 import { formatDateShort, relativeDays } from '../utils/dates';
-import { entityWord, KIND_LABEL, KIND_PLURAL, kindOf } from '../utils/kind';
+import { KIND_KEYS, KIND_PLURAL, kindCountText, kindOf } from '../utils/kind';
 import type { FacilityKind } from '../types';
 import { emptyState, field, pageHeader, type View } from './common';
 
@@ -46,6 +46,7 @@ export function listView(route: Route): View {
       h('option', { value: k, selected: filterState.sort === k }, `↕ ${SORT_LABELS[k]}`),
     ),
   );
+  const tabs = h('div', { class: 'kind-tabs', role: 'tablist', 'aria-label': 'Gruppe' });
   const chips = h('div', { class: 'chips' });
   const count = h('div', { class: 'list-count' });
   const list = h('ul', { class: 'plist' });
@@ -55,15 +56,16 @@ export function listView(route: Route): View {
     'div',
     { class: 'page page-list' },
     pageHeader({
-      title: store.practiceList().some((p) => kindOf(p) === 'klinik') ? 'Praxen & Kliniken' : 'Praxen',
-      actions: h('button', { class: 'icon-btn', 'aria-label': 'Praxis anlegen', onclick: () => navigate('/praxis/neu') }, iconEl('plus', 26)),
+      title: 'Praxen & Kliniken',
+      actions: h('button', { class: 'icon-btn', 'aria-label': 'Praxis anlegen', onclick: () => navigate(`/praxis/neu?art=${filterState.listKind}`) }, iconEl('plus', 26)),
     }),
+    tabs,
     h('div', { class: 'list-tools' }, h('div', { class: 'searchbox' }, iconEl('search', 20), search), h('div', { class: 'row' }, filterBtn, sortSelect, bulkBtn)),
     chips,
     count,
     list,
     more,
-    h('button', { class: 'fab', 'aria-label': 'Praxis anlegen', onclick: () => navigate('/praxis/neu') }, iconEl('plus', 30)),
+    h('button', { class: 'fab', 'aria-label': 'Praxis anlegen', onclick: () => navigate(`/praxis/neu?art=${filterState.listKind}`) }, iconEl('plus', 30)),
   );
 
   function render() {
@@ -71,10 +73,15 @@ export function listView(route: Route): View {
     setChildren(filterBtn, iconEl('filter', 20), 'Filter', nActive ? h('span', { class: 'count-badge' }, String(nActive)) : null);
     renderChips();
 
+    const kind = filterState.listKind;
+    const counts = kindCounts();
+    const filtering = activeFilterCount(filterState.filter) > 0 || !!filterState.filter.search;
+    setChildren(tabs, kindTabs(kind, counts, filtering, (k) => { limit = PAGE_SIZE; filterState.setListKind(k); }));
+
     const items = listPractices();
     const total = store.practices.size;
-    const clinics = store.practiceList().some((p) => kindOf(p) === 'klinik');
-    count.textContent = items.length === total ? entityWord(total, clinics) : `${items.length} von ${entityWord(total, clinics)}`;
+    const kindTotal = counts[kind].total;
+    count.textContent = items.length === kindTotal ? kindCountText(kindTotal, kind) : `${items.length} von ${kindCountText(kindTotal, kind)}`;
 
     if (!total) {
       setChildren(
@@ -92,8 +99,37 @@ export function listView(route: Route): View {
       setChildren(more);
       return;
     }
+    if (!kindTotal) {
+      setChildren(
+        list,
+        emptyState({
+          icon: 'list',
+          title: `Noch keine ${KIND_PLURAL[kind]}`,
+          text: 'Importiere eine Excel-Liste (die App erkennt die Gruppe an der Fachrichtung, z. B. „Allgemeinmedizin“ oder „Kieferorthopädie“) oder lege einen Eintrag von Hand an.',
+          action: h('div', { class: 'row center' },
+            h('a', { class: 'btn btn-primary', href: '#/import' }, iconEl('upload', 20), 'Excel importieren'),
+            h('a', { class: 'btn', href: `#/praxis/neu?art=${kind}` }, 'Eintrag anlegen'),
+          ),
+        }),
+      );
+      setChildren(more);
+      return;
+    }
     if (!items.length) {
-      setChildren(list, emptyState({ icon: 'search', title: 'Keine Treffer', text: 'Suche oder Filter anpassen.', action: h('button', { class: 'btn', onclick: () => { search.value = ''; filterState.reset(); } }, 'Filter zurücksetzen') }));
+      // Treffer in anderen Reitern anbieten
+      const elsewhere = KIND_KEYS.filter((k) => k !== kind && counts[k].filtered);
+      setChildren(
+        list,
+        emptyState({
+          icon: 'search',
+          title: `Keine Treffer bei ${KIND_PLURAL[kind]}`,
+          text: elsewhere.length ? 'Aber in einer anderen Gruppe:' : 'Suche oder Filter anpassen.',
+          action: h('div', { class: 'row center' },
+            elsewhere.map((k) => h('button', { class: 'btn btn-primary', onclick: () => filterState.setListKind(k) }, `${KIND_PLURAL[k]}: ${counts[k].filtered}`)),
+            h('button', { class: 'btn', onclick: () => { search.value = ''; filterState.reset(); } }, 'Filter zurücksetzen'),
+          ),
+        }),
+      );
       setChildren(more);
       return;
     }
@@ -113,7 +149,6 @@ export function listView(route: Route): View {
     const statusLabels = new Map(statusOptions().map((o) => [o.key, o.label]));
     setChildren(
       chips,
-      (f.kinds ?? []).map((k) => chip(KIND_PLURAL[k], () => filterState.update({ kinds: f.kinds.filter((x) => x !== k) }))),
       f.statuses.map((s) => chip(statusLabels.get(s) ?? s, () => filterState.update({ statuses: f.statuses.filter((x) => x !== s) }))),
       f.cities.map((c) => chip(c, () => filterState.update({ cities: f.cities.filter((x) => x !== c) }))),
       f.specialties.map((c) => chip(c, () => filterState.update({ specialties: f.specialties.filter((x) => x !== c) }))),
@@ -153,6 +188,31 @@ export function listView(route: Route): View {
   };
 }
 
+/**
+ * Reiter Orthopäden / Hausärzte / Zahnärzte & KFO / Kliniken mit Anzahl
+ * (bei aktiver Suche oder Filter: Anzahl der Treffer).
+ */
+export function kindTabs(
+  current: FacilityKind,
+  counts: Record<FacilityKind, { total: number; filtered: number }>,
+  filtering: boolean,
+  onSelect: (k: FacilityKind) => void,
+): HTMLElement[] {
+  return KIND_KEYS.map((k) =>
+    h(
+      'button',
+      {
+        class: ['kind-tab', k === current && 'on', !counts[k].total && 'empty'],
+        role: 'tab',
+        'aria-selected': String(k === current),
+        onclick: () => k !== current && onSelect(k),
+      },
+      h('span', { class: 'kind-tab-label' }, KIND_PLURAL[k]),
+      h('span', { class: 'kind-tab-count' }, String(filtering ? counts[k].filtered : counts[k].total)),
+    ),
+  );
+}
+
 function row(p: Practice): HTMLElement {
   const last = store.lastVisit(p.id);
   const color = practiceColor(p, store.settings);
@@ -174,7 +234,6 @@ function row(p: Practice): HTMLElement {
         h(
             'span',
             { class: 'badges' },
-            kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
             h('span', { class: 'badge badge-soft', style: { '--badge': color } }, STATE_LABEL[stateKeyOf(p)]),
             isDue && h('span', { class: 'badge badge-due' }, 'Besuch fällig'),
             p.needsReview && h('span', { class: 'badge badge-review' }, 'prüfen'),
@@ -255,32 +314,6 @@ export function openFilterSheet(): void {
     h('option', { value: 'kauft', selected: f.productState === 'kauft' }, 'kauft'),
   );
 
-  const kindChips = h('div', { class: 'chip-select' });
-  const renderKinds = () => {
-    const active = new Set(filterState.filter.kinds ?? []);
-    const counts = { praxis: 0, klinik: 0 };
-    store.practiceList().forEach((p) => counts[kindOf(p)]++);
-    setChildren(
-      kindChips,
-      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
-        h(
-          'button',
-          {
-            class: ['chip-toggle', active.has(k) && 'on'],
-            onclick: () => {
-              if (active.has(k)) active.delete(k);
-              else active.add(k);
-              filterState.update({ kinds: [...active] });
-              renderKinds();
-            },
-          },
-          `${KIND_PLURAL[k]} (${counts[k]})`,
-        ),
-      ),
-    );
-  };
-  renderKinds();
-
   const events = store.eventList(true);
   const eventStateSel = h(
     'select',
@@ -297,8 +330,6 @@ export function openFilterSheet(): void {
   const sheet = openSheet({
     title: 'Filter',
     content: [
-      h('h3', { class: 'sheet-section' }, 'Art'),
-      kindChips,
       h('h3', { class: 'sheet-section' }, 'Status'),
       statusChips,
       h('h3', { class: 'sheet-section' }, 'Besonderes'),

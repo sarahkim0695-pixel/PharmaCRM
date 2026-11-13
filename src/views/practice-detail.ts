@@ -11,7 +11,7 @@ import { toast } from '../ui/toast';
 import { appleMapsUrl, fullAddress, telUrl } from '../utils/maps';
 import { emptyState, pageHeader, section, type View } from './common';
 import { addPracticeToTour } from './tour-view';
-import { KIND_LABEL, kindOf } from '../utils/kind';
+import { entityLabel, KIND_LABEL, kindOf } from '../utils/kind';
 
 /**
  * Weitere Abschnitte (Termine, Besuche, Produkte) melden sich hier an,
@@ -46,7 +46,7 @@ export function practiceView(route: Route): View {
       h(
         'div',
         { class: 'danger-zone' },
-        h('button', { class: 'btn btn-danger-outline', onclick: () => void deletePractice(p) }, iconEl('trash', 18), `${KIND_LABEL[kindOf(p)]} löschen`),
+        h('button', { class: 'btn btn-danger-outline', onclick: () => void deletePractice(p) }, iconEl('trash', 18), `${entityLabel(kindOf(p))} löschen`),
       ),
     );
   }
@@ -124,13 +124,13 @@ function locationCard(p: Practice): HTMLElement {
 async function deletePractice(p: Practice): Promise<void> {
   const visits = store.visitsFor(p.id).length;
   const ok = await confirmDialog({
-    title: `${KIND_LABEL[kindOf(p)]} löschen?`,
+    title: `${entityLabel(kindOf(p))} löschen?`,
     message: `„${p.name}“${visits ? ` und ${visits} erfasste Besuche` : ''} werden endgültig gelöscht.`,
     confirmLabel: 'Löschen',
     danger: true,
   });
   if (!ok) return;
   await store.deletePractices([p.id]);
-  toast('Praxis gelöscht');
+  toast(`${entityLabel(kindOf(p))} gelöscht`);
   navigate('/liste', { replace: true });
 }

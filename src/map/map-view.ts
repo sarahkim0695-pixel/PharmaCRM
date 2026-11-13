@@ -18,14 +18,14 @@ import { geocodeQueue, type QueueStatus } from '../geo/geocoder';
 import { allShapes, labelPoint } from '../geo/plz-data';
 import { goBack, navigate } from '../router';
 import { activeFilterCount, filterState } from '../state/filters';
-import { filteredPractices, statusOptions } from '../state/selectors';
+import { kindCounts, mapPractices, statusOptions } from '../state/selectors';
 import { store } from '../state/store';
-import type { Practice, PlzFeature } from '../types';
+import type { FacilityKind, Practice, PlzFeature } from '../types';
 import { debounce, h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { practiceColor, stateColor, type StateKey } from '../utils/customer';
-import { kindOf } from '../utils/kind';
+import { KIND_KEYS, KIND_PIN_LETTER, KIND_PLURAL, KIND_PLURAL_SHORT, kindOf } from '../utils/kind';
 import { plural } from '../utils/text';
 import { formatDateShort } from '../utils/dates';
 import { formatTime } from '../tour/opening-hours';
@@ -125,6 +125,7 @@ export class MapView {
       if (this.mode.kind === 'pin') this.placePin(e.latlng);
     });
     this.map.on('locationfound', (e: L.LocationEvent) => this.showLocation(e));
+
     this.map.on('locationerror', () =>
       toast('Standort nicht verfügbar. Bitte Ortungsdienste für Safari erlauben.', { kind: 'error' }),
     );
@@ -322,12 +323,14 @@ export class MapView {
 
   private pinIcon(p: Practice): L.DivIcon {
     const color = practiceColor(p, store.settings);
-    const cls = ['pin', kindOf(p) === 'klinik' && 'pin-klinik', p.needsReview && 'pin-review', p.geoStatus === 'approx' && 'pin-approx']
+    const kind = kindOf(p);
+    const letter = KIND_PIN_LETTER[kind]; // H = Hausarzt, Z = Zahnarzt/KFO
+    const cls = ['pin', kind === 'klinik' && 'pin-klinik', letter && 'pin-letter', p.needsReview && 'pin-review', p.geoStatus === 'approx' && 'pin-approx']
       .filter(Boolean)
       .join(' ');
     return L.divIcon({
       className: 'pin-wrap',
-      html: `<div class="${cls}" style="--pin:${color}"><span></span></div>${p.needsReview ? '<b class="pin-badge">!</b>' : ''}`,
+      html: `<div class="${cls}" style="--pin:${color}"><span>${letter}</span></div>${p.needsReview ? '<b class="pin-badge">!</b>' : ''}`,
       iconSize: [36, 40],
       iconAnchor: [18, 38],
       popupAnchor: [0, -34],
@@ -348,7 +351,7 @@ export class MapView {
   }
 
   refreshPractices(): void {
-    const visible = filteredPractices().filter((p) => p.lat !== undefined && p.lng !== undefined);
+    const visible = mapPractices().filter((p) => p.lat !== undefined && p.lng !== undefined);
     const keep = new Set(visible.map((p) => p.id));
 
     const toRemove: L.Marker[] = [];
@@ -385,6 +388,7 @@ export class MapView {
   private focusPractice(id: string): void {
     const p = store.getPractice(id);
     if (!p) return;
+    filterState.showOnMap(kindOf(p)); // Gruppe einblenden, falls sie gerade ausgeblendet ist
     if (p.lat === undefined || p.lng === undefined) {
       toast('Für diese Praxis gibt es noch keinen Pin.', { action: 'Pin setzen', onAction: () => navigate(`/karte/pin/${id}`) });
       return;
@@ -392,8 +396,9 @@ export class MapView {
     const m = this.markers.get(id);
     if (m) {
       this.cluster.zoomToShowLayer(m, () => {
+        // Kurzinfo erst nach dem Zoomen öffnen – sonst verschiebt Leaflet die Karte falsch
+        this.map.once('moveend', () => m.openPopup());
         this.map.setView(m.getLatLng(), Math.max(this.map.getZoom(), 15));
-        m.openPopup();
       });
     } else {
       // Praxis ist durch den Filter ausgeblendet → vorübergehend anzeigen
@@ -401,8 +406,9 @@ export class MapView {
       this.tempMarker = L.marker([p.lat, p.lng], { icon: this.pinIcon(p) })
         .bindPopup(buildPopup(p), { maxWidth: 320, minWidth: 240 })
         .addTo(this.map);
+      const temp = this.tempMarker;
+      this.map.once('moveend', () => temp.openPopup());
       this.map.setView([p.lat, p.lng], 16);
-      this.tempMarker.openPopup();
       this.tempMarker.on('popupclose', () => {
         if (this.tempMarker) this.map.removeLayer(this.tempMarker);
         this.tempMarker = null;
@@ -572,10 +578,11 @@ export class MapView {
     this.els.legend.hidden = editing;
     this.els.banner.hidden = !editing;
 
-    // Suche + Filter
-    const total = store.practices.size;
+    // Suche + Filter + Gruppen
+    const counts = kindCounts();
+    const total = filterState.mapKinds.reduce((n, k) => n + counts[k].total, 0);
     const nFilters = activeFilterCount(filterState.filter) + (filterState.filter.search ? 1 : 0);
-    const shown = nFilters ? filteredPractices().length : total;
+    const shown = nFilters ? mapPractices().length : total;
     setChildren(
       this.els.top,
       h(
@@ -592,10 +599,12 @@ export class MapView {
             iconEl('close', 16),
           )
         : null,
+      this.kindToggles(counts),
     );
 
     // Legende (Status-Farben; Antippen filtert)
     this.renderLegend();
+    requestAnimationFrame(() => this.updatePopupPadding());
 
     // Willkommen: solange weder Gebiet noch Praxen vorhanden sind
     const empty = !total && !store.settings.territoryPlz.length && !editing;
@@ -656,8 +665,54 @@ export class MapView {
     this.refreshProgress();
   }
 
+  /**
+   * Kurzinfos nicht unter Suche und Gruppen-Knöpfen öffnen: Leaflet verschiebt die Karte
+   * beim Öffnen so, dass oben die Höhe der Leiste frei bleibt (gilt für alle Kurzinfos).
+   */
+  private updatePopupPadding(): void {
+    const top = this.els.top;
+    const pad = top && !top.hidden ? top.getBoundingClientRect().bottom - this.map.getContainer().getBoundingClientRect().top + 8 : 12;
+    L.Popup.prototype.options.autoPanPaddingTopLeft = L.point(12, Math.max(12, Math.round(pad)));
+    L.Popup.prototype.options.autoPanPaddingBottomRight = L.point(12, 12);
+  }
+
+  /**
+   * Gruppen-Knöpfe: Orthopäden / Hausärzte / Zahnärzte & KFO / Kliniken – einzeln an- und ausschalten.
+   * Nur Gruppen mit Einträgen; bei nur einer Gruppe keine Knöpfe.
+   */
+  private kindToggles(counts: Record<FacilityKind, { total: number; filtered: number }>): HTMLElement | null {
+    const active = new Set(filterState.mapKinds);
+    const shown = KIND_KEYS.filter((k) => counts[k].total || active.has(k));
+    if (shown.length < 2) return null;
+    const toggle = (k: FacilityKind) => {
+      if (active.has(k)) {
+        if (active.size === 1) {
+          toast('Mindestens eine Gruppe bleibt sichtbar – tippe zuerst eine andere an.');
+          return;
+        }
+        active.delete(k);
+      } else {
+        active.add(k);
+      }
+      filterState.setMapKinds(KIND_KEYS.filter((x) => active.has(x)));
+    };
+    return h(
+      'div',
+      { class: 'map-kinds', role: 'group', 'aria-label': 'Welche Gruppen anzeigen' },
+      shown.map((k) =>
+        h(
+          'button',
+          { class: ['map-kind', active.has(k) && 'on'], 'aria-pressed': String(active.has(k)), 'aria-label': KIND_PLURAL[k], onclick: () => toggle(k) },
+          h('span', { class: 'map-kind-check' }, active.has(k) ? '✓' : ''),
+          KIND_PLURAL_SHORT[k],
+          h('span', { class: 'map-kind-count' }, String(counts[k].total)),
+        ),
+      ),
+    );
+  }
+
   private renderLegend(): void {
-    const options = statusOptions();
+    const options = statusOptions(filterState.mapKinds);
     if (!options.length) {
       this.els.legend.hidden = true;
       return;
@@ -710,11 +765,23 @@ export class MapView {
               }),
             ),
           ),
-          store.practiceList().some((p) => kindOf(p) === 'klinik')
-            ? h('li', { class: 'legend-hint' }, h('span', { class: 'pin-mini pin-mini-klinik' }), 'Quadrat = Klinik')
-            : null,
+          this.pinShapeHints(),
         ),
     );
+  }
+
+  /** Erklärt die Pin-Formen der gerade sichtbaren Gruppen */
+  private pinShapeHints(): HTMLElement[] {
+    const visible = new Set(filterState.mapKinds);
+    const present = new Set(store.practiceList().map((p) => kindOf(p)));
+    const hint = (k: FacilityKind, mini: HTMLElement, text: string) =>
+      visible.has(k) && present.has(k) ? h('li', { class: 'legend-hint' }, mini, text) : null;
+    return [
+      hint('ortho', h('span', { class: 'pin-mini pin-mini-plain' }), 'Punkt = Orthopäde'),
+      hint('hausarzt', h('span', { class: 'pin-mini pin-mini-letter' }, 'H'), 'H = Hausarzt'),
+      hint('zahn', h('span', { class: 'pin-mini pin-mini-letter' }, 'Z'), 'Z = Zahnarzt / KFO'),
+      hint('klinik', h('span', { class: 'pin-mini pin-mini-klinik' }), 'Quadrat = Klinik'),
+    ].filter((x): x is HTMLLIElement => !!x);
   }
 
   private refreshProgress(): void {

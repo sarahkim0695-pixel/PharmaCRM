@@ -1,6 +1,6 @@
 /** Excel-Import der Praxisliste mit Vorschau. */
 import { geocodeQueue, MIN_INTERVAL_MS } from '../geo/geocoder';
-import { FIELD_LABELS, mergeImport, parsePracticeSheets, type Field, type ImportPreview, type MergeResult } from '../import/practice-import';
+import { countKinds, FIELD_LABELS, mergeImport, parsePracticeSheets, withKind, type Field, type ImportPreview, type MergeResult } from '../import/practice-import';
 import { readXlsx } from '../import/xlsx-reader';
 import { navigate } from '../router';
 import { store } from '../state/store';
@@ -12,7 +12,8 @@ import { STATE_LABEL, stateColor, stateFromText } from '../utils/customer';
 import { plural } from '../utils/text';
 import { findDuplicates } from '../state/duplicates';
 import { duplicateGroups } from '../state/selectors';
-import type { Practice } from '../types';
+import type { FacilityKind, Practice } from '../types';
+import { KIND_KEYS, KIND_PLURAL } from '../utils/kind';
 import { pageHeader, section, type View } from './common';
 
 export function importView(): View {
@@ -23,12 +24,13 @@ export function importView(): View {
     setChildren(
       body,
       section(
-        'Praxis- und Klinikliste (.xlsx)',
+        'Liste importieren (.xlsx)',
         h('p', null, 'Wähle deine Excel-Datei, z. B. ', h('b', null, 'Praxisliste_Gebiet.xlsx'), '. Erwartete Spalten:'),
         h('p', { class: 'columns-hint' }, 'Praxis · Fachrichtung · Straße · PLZ · Ort · Status · Hinweis'),
-        h('p', { class: 'muted small' }, 'Optional: Typ (Praxis/Klinik), Intervall (z. B. „4 Wochen“), Öffnungszeiten (z. B. „Mo-Fr 8-12, Mo Di Do 14-18“ – oder je eine Spalte Mo, Di, Mi …), Parken (Min), Vor Ort (Min).'),
+        h('p', { class: 'muted small' }, 'Optional: Typ (z. B. Orthopädie, Hausarzt, Zahnarzt, Klinik), Intervall (z. B. „4 Wochen“), Öffnungszeiten (z. B. „Mo-Fr 8-12, Mo Di Do 14-18“ – oder je eine Spalte Mo, Di, Mi …), Parken (Min), Vor Ort (Min).'),
         h('ul', { class: 'bullets' },
           h('li', null, 'Gelb markierte Zeilen werden als ', h('span', { class: 'badge badge-review' }, 'prüfen'), ' angezeigt.'),
+          h('li', null, 'Orthopäden, Hausärzte, Zahnärzte & KFO und Kliniken erkennt die App an der Fachrichtung, der Spalte „Typ“ oder am Namen des Tabellenblatts – oder du wählst es in der Vorschau für die ganze Datei.'),
           h('li', null, 'Erneuter Import aktualisiert vorhandene Praxen – Besuche, Produkte und Pins bleiben erhalten.'),
           h('li', null, 'Die Datei bleibt auf deinem Gerät, sie wird nirgends hochgeladen.'),
         ),
@@ -45,14 +47,24 @@ export function importView(): View {
     try {
       const sheets = readXlsx(await file.arrayBuffer());
       const preview = parsePracticeSheets(sheets);
-      showPreview(file.name, preview, mergeImport(store.practiceList(), preview.rows));
+      showPreview(file.name, preview);
     } catch (err) {
       showStart((err as Error).message);
     }
   }
 
-  function showPreview(fileName: string, preview: ImportPreview, merge: MergeResult) {
+  function showPreview(fileName: string, base: ImportPreview, kindForAll: FacilityKind | '' = '') {
+    // „Alle Einträge dieser Datei sind …“ – sonst automatisch erkannt
+    const rows = kindForAll ? withKind(base.rows, kindForAll) : base.rows;
+    const preview: ImportPreview = { ...base, rows, kindCounts: countKinds(rows) };
+    const merge = mergeImport(store.practiceList(), rows);
     const deleteMissing = h('input', { type: 'checkbox', class: 'switch' });
+    const kindSelect = h(
+      'select',
+      { 'aria-label': 'Gruppe', onchange: () => showPreview(fileName, base, kindSelect.value as FacilityKind | '') },
+      h('option', { value: '' }, 'automatisch erkennen (Fachrichtung, Typ, Blatt)'),
+      KIND_KEYS.map((k) => h('option', { value: k, selected: kindForAll === k }, `alle sind ${KIND_PLURAL[k]}`)),
+    );
     const colRow = (f: Field) =>
       h('li', { class: preview.columns[f] !== undefined ? 'ok' : 'missing' }, iconEl(preview.columns[f] !== undefined ? 'check' : 'close', 16), FIELD_LABELS[f]);
 
@@ -68,14 +80,15 @@ export function importView(): View {
         h(
           'div',
           { class: 'stats' },
-          stat(preview.kindCounts.praxis, 'Praxen'),
-          preview.kindCounts.klinik ? stat(preview.kindCounts.klinik, 'Kliniken') : null,
+          KIND_KEYS.filter((k) => preview.kindCounts[k]).map((k) => stat(preview.kindCounts[k], KIND_PLURAL[k])),
           preview.duplicateRows.length ? stat(preview.duplicateRows.length, 'doppelte Zeilen aussortiert') : null,
           stat(preview.reviewCount, 'gelb = „prüfen“', 'review'),
           stat(merge.added, 'neu'),
           stat(merge.updated, 'aktualisiert'),
           merge.unchanged ? stat(merge.unchanged, 'unverändert') : null,
         ),
+        h('h3', { class: 'sheet-section' }, 'Gruppe'),
+        h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Einträge dieser Datei'), kindSelect),
         h('h3', { class: 'sheet-section' }, 'Status aus der Excel → Kundenstatus'),
         h(
           'div',

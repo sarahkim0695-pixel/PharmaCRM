@@ -4,7 +4,8 @@
  */
 import { distanceKm } from '../state/filters';
 import { store } from '../state/store';
-import type { PlanEntry, Practice, TimeRange, Tour, TourPlan } from '../types';
+import type { FacilityKind, PlanEntry, Practice, TimeRange, Tour, TourPlan } from '../types';
+import { kindOf } from '../utils/kind';
 import { dueInfo, dueText, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { parseDate } from '../utils/dates';
 import { normalize } from '../utils/text';
@@ -254,6 +255,11 @@ export interface Suggestion {
  * Nur an dem Tag geöffnete und nicht gerade erst besuchte Praxen; sortiert nach
  * Dringlichkeit (Fälligkeit, Kundenstatus) und Umweg.
  */
+/** Gruppen, aus denen Vorschläge kommen (Standard: nur Orthopäden) */
+export function tourKinds(tour: Pick<Tour, 'kinds'>): FacilityKind[] {
+  return tour.kinds?.length ? tour.kinds : ['ortho'];
+}
+
 export function suggestPractices(tour: Tour, opts: { limit?: number; maxDetourKm?: number } = {}): Suggestion[] {
   const limit = opts.limit ?? 12;
   const maxDetour = opts.maxDetourKm ?? 20;
@@ -277,9 +283,11 @@ export function suggestPractices(tour: Tour, opts: { limit?: number; maxDetourKm
   const regionCities = new Set((region?.cities ?? []).map(normalize));
   const centers = region ? cityCenters(region.cities) : [];
 
+  const kinds = new Set(tourKinds(tour));
   const out: Suggestion[] = [];
   for (const p of store.practices.values()) {
     if (inTour.has(p.id) || p.lat === undefined || p.lng === undefined) continue;
+    if (!kinds.has(kindOf(p))) continue;
     const open = hoursOn(p.openingHours, date);
     if (open && !open.length) continue; // an dem Tag geschlossen
     const due = dueInfo(p, store.lastVisit(p.id)?.date, settings, date);

@@ -6,7 +6,8 @@ import { distinctValues } from '../state/selectors';
 import { store } from '../state/store';
 import type { FacilityKind, Practice } from '../types';
 import { h, setChildren } from '../ui/dom';
-import { KIND_LABEL } from '../utils/kind';
+import { entityLabel, KIND_KEYS, KIND_SHORT, kindOf } from '../utils/kind';
+import { filterState } from '../state/filters';
 import { formatInterval, INTERVAL_CHOICES, STATE_KEYS, STATE_LABEL, stateKeyOf, type StateKey } from '../utils/customer';
 import { toast } from '../ui/toast';
 import { newId, nowIso } from '../utils/id';
@@ -27,14 +28,15 @@ export function practiceFormView(route: Route): View {
     h('input', { name, value, autocomplete: 'off', ...extra });
 
   const name = input('name', p.name, { required: true, placeholder: 'z. B. Praxis Dr. Muster' });
-  // Art: Praxis oder Klinik
-  let kind: FacilityKind = p.kind ?? (route.query.get('art') === 'klinik' ? 'klinik' : 'praxis');
-  const kindSeg = h('div', { class: 'segmented' });
+  // Gruppe: Orthopädie / Hausarzt / Zahn & KFO / Klinik (neu: vom gewählten Reiter der Liste)
+  const artParam = route.query.get('art') as FacilityKind | null;
+  let kind: FacilityKind = isNew ? (artParam && KIND_KEYS.includes(artParam) ? artParam : filterState.listKind) : kindOf(p as Practice);
+  const kindSeg = h('div', { class: 'segmented segmented-kind', role: 'radiogroup', 'aria-label': 'Gruppe' });
   const renderKind = () =>
     setChildren(
       kindSeg,
-      (['praxis', 'klinik'] as FacilityKind[]).map((k) =>
-        h('button', { type: 'button', class: ['seg', kind === k && 'on'], onclick: () => { kind = k; renderKind(); } }, KIND_LABEL[k]),
+      KIND_KEYS.map((k) =>
+        h('button', { type: 'button', class: ['seg', kind === k && 'on'], role: 'radio', 'aria-checked': String(kind === k), onclick: () => { kind = k; renderKind(); } }, KIND_SHORT[k]),
       ),
     );
   renderKind();
@@ -117,7 +119,8 @@ export function practiceFormView(route: Route): View {
       updatedAt: ts,
       geoStatus: 'pending',
       ...existing,
-      kind,
+      // nur speichern, wenn die Gruppe nicht ohnehin aus Fachrichtung/Name folgt
+      kind: kind === kindOf({ name: name.value, specialty: specialty.value }) ? undefined : kind,
       name: name.value.trim(),
       specialty: specialty.value.trim(),
       street: street.value.trim(),
@@ -130,6 +133,7 @@ export function practiceFormView(route: Route): View {
       hint: hint.value.trim(),
       needsReview: review.checked,
     };
+    if (next.kind === undefined) delete next.kind;
     const addressChanged =
       !existing ||
       normalizeStreet(existing.street) !== normalizeStreet(next.street) ||
@@ -143,12 +147,12 @@ export function practiceFormView(route: Route): View {
     }
     await store.savePractice(next);
     if (addressChanged) geocodeQueue.start();
-    toast(isNew ? 'Praxis angelegt' : 'Gespeichert');
+    toast(isNew ? `${entityLabel(kind)} angelegt` : 'Gespeichert');
     if (isNew) navigate(`/praxis/${next.id}`, { replace: true });
     else goBack(`/praxis/${next.id}`);
   }
 
-  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neuer Eintrag' : `${KIND_LABEL[p.kind ?? 'praxis']} bearbeiten`, back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
+  const el = h('div', { class: 'page page-form' }, pageHeader({ title: isNew ? 'Neuer Eintrag' : `${entityLabel(kindOf(p as Practice))} bearbeiten`, back: isNew ? '/liste' : `/praxis/${route.params.id}` }), form);
   if (isNew) requestAnimationFrame(() => name.focus());
   return { el };
 }

@@ -29,8 +29,11 @@ export interface EventItem {
   updatedAt: string;
 }
 
-/** Art der Einrichtung */
-export type FacilityKind = 'praxis' | 'klinik';
+/**
+ * Gruppe / Art der Einrichtung: Orthopäden, Hausärzte, Zahnärzte & Kieferorthopäden, Kliniken.
+ * („praxis“ ist der alte Wert aus früheren Versionen – die Gruppe ergibt sich dann aus der Fachrichtung.)
+ */
+export type FacilityKind = 'ortho' | 'hausarzt' | 'zahn' | 'klinik';
 
 /** Was mit einem Produkt bei einer Praxis passiert ist. */
 export type ProductState = 'angeboten' | 'kauft';
@@ -40,8 +43,8 @@ export type ProductState = 'angeboten' | 'kauft';
  */
 export interface Practice {
   id: string;
-  /** Praxis oder Klinik (fehlt = Praxis) */
-  kind?: FacilityKind;
+  /** Gruppe (fehlt oder alter Wert „praxis“ = aus der Fachrichtung erkennen) – immer über kindOf() lesen */
+  kind?: FacilityKind | 'praxis';
   name: string; // Spalte „Praxis“ bzw. „Klinik“
   specialty: string; // „Fachrichtung“
   street: string; // „Straße“
@@ -182,6 +185,8 @@ export interface Tour {
   maxVisits?: number;
   /** Region für Vorschläge: Orte + Umkreis */
   region?: { cities: string[]; radiusKm: number };
+  /** Welche Gruppen vorgeschlagen werden (fehlt = nur Orthopäden) */
+  kinds?: FacilityKind[];
   stops: TourStop[];
   /** Notizen für diesen Tag (z. B. was ich einpacken muss) */
   dayNote?: string;

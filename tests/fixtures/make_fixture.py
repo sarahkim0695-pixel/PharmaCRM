@@ -19,14 +19,14 @@ ws["A1"].font = Font(bold=True, size=14)
 ws.append([])
 ws.append(["Praxis", "Fachrichtung", "Straße", "PLZ", "Ort", "Status", "Hinweis", "Öffnungszeiten", "Parken (Min)", "Vor Ort (Min)"])
 rows = [
-    ("Praxis Dr. Anna Beispiel", "Allgemeinmedizin", "Marienplatz 8", 80331, "München", "Kunde", "", "Mo-Fr 8-12, Mo Di Do 14-18", 10, 20),
+    ("Praxis Dr. Anna Beispiel", "Orthopädie", "Marienplatz 8", 80331, "München", "Kunde", "", "Mo-Fr 8-12, Mo Di Do 14-18", 10, 20),
     ("Hausarztpraxis Muster", "Innere Medizin", "Leopoldstraße 50", 80802, "München", "kein Kunde", "Termin nur vormittags", "Mo-Fr 8-12 und 15-18; Mi nachmittag geschlossen", None, None),
     ("Orthopädie am Rathaus", "Orthopädie", "Altstadt 315", 84028, "Landshut", "Interessent", "", "Mo-Do 8-17, Fr 8-13", None, None),
     ("Gemeinschaftspraxis Augsburg Mitte", "Allgemeinmedizin", "Rathausplatz 2", 86150, "Augsburg", "Kunde", "Ansprechpartnerin Fr. Test", "Mo, Di, Do 8:00-12:00 / 14:00-18:00; Mi, Fr 8:00-12:00", 8, None),
-    ("Praxis am Dom", "Dermatologie", "Residenzplatz 8", 94032, "Passau", "kein Kunde", "Adresse unsicher", "nach Vereinbarung", None, None),
+    ("Praxis am Dom", "Zahnmedizin", "Residenzplatz 8", 94032, "Passau", "kein Kunde", "Adresse unsicher", "nach Vereinbarung", None, None),
     ("Chirurgie Ingolstadt", "Chirurgie", "Rathausplatz 2", 85049, "Ingolstadt", "Kunde", "", None, None, None),
-    ("Praxis Allgäu", "Allgemeinmedizin", "Rathausplatz 22", 87435, "Kempten (Allgäu)", "Interessent", "neu eröffnet", "Mo-Fr 7:30-12:30", None, None),
-    ("Praxis Unbekannt", "Allgemeinmedizin", "Nirgendwoweg 999", 80331, "München", "kein Kunde", "Adresse existiert nicht", None, None, None),
+    ("Praxis Allgäu", "Kieferorthopädie", "Rathausplatz 22", 87435, "Kempten (Allgäu)", "Interessent", "neu eröffnet", "Mo-Fr 7:30-12:30", None, None),
+    ("Praxis Unbekannt", "Orthopädie", "Nirgendwoweg 999", 80331, "München", "kein Kunde", "Adresse existiert nicht", None, None, None),
     ("Praxis Rosenheim", "Urologie", "Königstraße 24", 83022, "Rosenheim", "", "", "Mo-Fr 8-12; Di Do 15-18", None, "25 min"),
     # doppelte Zeile (gleicher Name + gleiche Adresse) – wird beim Import aussortiert
     ("Chirurgie Ingolstadt", "Chirurgie", "Rathausplatz 2", 85049, "Ingolstadt", "Kunde", "Zeile doppelt in der Liste", None, None, None),

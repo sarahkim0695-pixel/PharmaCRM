@@ -6,10 +6,10 @@ Alle Daten bleiben auf dem Gerät. Es gibt keinen Server und keine Datenbank im 
 | Funktion | Was sie kann |
 | --- | --- |
 | 🗺️ **Gebietskarte** | Dein Gebiet als gelbe PLZ-Flächen (Ober-/Niederbayern, Schwaben). PLZ per Antippen oder als Liste hinzufügen/entfernen. |
-| 🏥 **Kliniken** | Neben Praxen auch Kliniken – eigener Pin (Quadrat mit Kreuz), Filter, Import über Spalte „Typ“ oder eigenes Tabellenblatt. |
+| 👥 **Gruppen** | **Orthopäden, Hausärzte, Zahnärzte & Kieferorthopäden, Kliniken** – in der Liste als Reiter, auf der Karte einzeln ein- und ausschaltbar. Beim Öffnen der App: nur Orthopäden. Erkennung beim Import über die Fachrichtung, Spalte „Typ“ oder das Tabellenblatt. |
 | 🧹 **Doppelte Standorte** | Doppelte Zeilen werden beim Import aussortiert; unklare Fälle (gleiche Adresse/gleicher Name) zum Prüfen und Zusammenführen. |
 | 📋 **Praxen** | Excel-Import (`.xlsx`), automatische Adresssuche, gelb markierte Zeilen erscheinen als **„prüfen“**. Pin von Hand setzen, wenn eine Adresse nicht gefunden wird. |
-| 📍 **Pins** | Ampelfarben: grün = bestellender Kunde, orange = in den Startlöchern, rot = nicht in Kontakt. Beim Hineinzoomen einzelne Pins statt Zahlen. Antippen: Kurzinfo, Route in Apple Karten, Details. |
+| 📍 **Pins** | Ampelfarben: grün = bestellender Kunde, orange = in den Startlöchern, rot = nicht in Kontakt. Form: Punkt = Orthopäde, **H** = Hausarzt, **Z** = Zahnarzt/KFO, Quadrat = Klinik. Beim Hineinzoomen einzelne Pins statt Zahlen. Antippen: Kurzinfo, Route in Apple Karten, Details. |
 | 🔎 **Liste** | Suchen, filtern (Status, Ort, Fachrichtung, PLZ, „prüfen“, Produkt, Veranstaltung …), sortieren (auch „in der Nähe“). Praxen anlegen, bearbeiten, löschen. **Mehrere bearbeiten**: Status oder Intervall für alle angezeigten auf einmal setzen. |
 | 📝 **Besuche** | Besuche mit Datum, Ansprechpartner und Notiz. Nächster Termin. Übersicht „Termine“, „lange nicht besucht“, „Verlauf“. |
 | 📦 **Produkte** | Eigene Produktliste. Pro Praxis: „angeboten“ oder „kauft“. |
@@ -74,7 +74,7 @@ So muss die Tabelle aussehen (Reihenfolge egal, Überschriften dürfen auch etwa
 
 - Eine Spalte **Telefon** wird zusätzlich übernommen, wenn vorhanden.
 - Für die **Tourplanung** (alles optional – siehe nächster Abschnitt): **Öffnungszeiten**, **Parken (Min)**, **Vor Ort (Min)**.
-- **Kliniken** (siehe unten): Spalte **Typ** mit „Praxis“ oder „Klinik“ – oder ein eigenes Tabellenblatt „Kliniken“.
+- **Gruppe** (siehe unten): Orthopäden, Hausärzte, Zahnärzte & KFO oder Kliniken – meist erkennt die App das an der Fachrichtung.
 - **Doppelte Zeilen** (gleicher Name und gleiche Adresse) werden automatisch nur einmal übernommen.
 - **Intervall** (optional): wie oft besucht werden soll, z. B. `4 Wochen`, `14 Tage`, `monatlich`, `Quartal`.
 
@@ -105,14 +105,31 @@ In der Praxis-Ansicht änderst du den Status mit einem Tipp. Dieser bleibt erhal
 Nach dem Import sucht die App die Adressen auf der Karte (über OpenStreetMap, **höchstens 1 Adresse pro Sekunde** – bei 300 Praxen also ca. 5–10 Minuten). Lass die App dabei geöffnet; sonst macht sie beim nächsten Öffnen weiter.
 Nicht gefundene Adressen findest du unter **Mehr → Adresssuche** oder in der Liste mit dem Filter „Standort fehlt oder ungenau“. Dort tippst du auf **„Pin setzen“** und dann auf die richtige Stelle in der Karte.
 
-#### Kliniken
+#### Gruppen: Orthopäden, Hausärzte, Zahnärzte & KFO, Kliniken
 
-Du hast zwei Möglichkeiten – beide in derselben Excel-Datei:
+Jeder Eintrag gehört zu einer von vier Gruppen. Die App erkennt sie beim Import in dieser Reihenfolge:
 
-1. **Eigenes Tabellenblatt** mit dem Namen „Kliniken“ (gleiche Spalten wie bei den Praxen; die erste Spalte darf statt „Praxis“ auch „Klinik“ oder „Name“ heißen). Die App liest **alle Blätter** der Datei ein.
-2. **Spalte „Typ“** mit „Praxis“ oder „Klinik“ in derselben Liste.
+1. **Spalte „Typ“** (oder „Art“), z. B. „Orthopädie“, „Hausarzt“, „Zahnarzt“, „KFO“, „Klinik“.
+2. **Name des Tabellenblatts**, z. B. „Hausärzte“, „Zahnärzte“, „Kieferorthopäden“, „Kliniken“. Die App liest **alle Blätter** der Datei ein – du kannst also jede Gruppe auf ein eigenes Blatt schreiben.
+3. **Fachrichtung**:
 
-Steht nichts dabei, erkennt die App Kliniken am Namen („Klinik“, „Klinikum“, „Krankenhaus“). Die Art lässt sich in der App jederzeit ändern (Bearbeiten → Praxis/Klinik). Wenn du später nur die Klinikliste neu importierst, schlägt die App keine Praxen zum Löschen vor.
+| Fachrichtung z. B. | Gruppe |
+| --- | --- |
+| Orthopädie, Unfallchirurgie | **Orthopäden** |
+| Allgemeinmedizin, Hausarzt, Innere Medizin, Praktischer Arzt | **Hausärzte** |
+| Zahnmedizin, Zahnarzt, Kieferorthopädie, KFO, Oralchirurgie, Mund-Kiefer-Gesichtschirurgie | **Zahnärzte & KFO** |
+| Name enthält „Klinik“, „Klinikum“, „Krankenhaus“ | **Kliniken** |
+| alles andere | **Orthopäden** |
+
+4. **Ganze Datei auf einmal**: In der Import-Vorschau unter „Gruppe“ z. B. **„alle sind Hausärzte“** wählen – praktisch, wenn du eine eigene Hausärzte-Liste ohne Fachrichtung hast.
+
+Die Gruppe lässt sich in der App jederzeit ändern (**Bearbeiten** → Orthopädie / Hausarzt / Zahn / KFO / Klinik); eine so gewählte Gruppe überschreibt ein späterer Import nur, wenn Typ-Spalte, Blattname oder die Auswahl „alle sind …“ etwas anderes sagen.
+Importierst du später nur eine Liste einer Gruppe (z. B. nur Hausärzte), schlägt die App keine Einträge der anderen Gruppen zum Löschen vor.
+
+**In der App:**
+- **Liste:** Oben vier **Reiter** – Orthopäden, Hausärzte, Zahnärzte & KFO, Kliniken – mit der Anzahl. Suche und Filter gelten im gewählten Reiter; findet die Suche dort nichts, zeigt die App, in welchem anderen Reiter es Treffer gibt. Auch **Besuche → Fällig** hat diese Reiter.
+- **Karte:** Unter der Suche je Gruppe ein Knopf mit Haken – antippen blendet die Gruppe ein oder aus (z. B. nur Orthopäden, Orthopäden + Hausärzte oder nur Hausärzte). Pins: Punkt = Orthopäde, **H** = Hausarzt, **Z** = Zahnarzt/KFO, Quadrat mit Kreuz = Klinik.
+- **Beim Öffnen der App** zeigen Liste und Karte immer **nur die Orthopäden**. „Auf Karte“ bei einem Hausarzt blendet die Hausärzte automatisch dazu ein.
 
 #### Doppelte Standorte
 
@@ -169,6 +186,7 @@ Die Veranstaltung erscheint sofort bei **allen** Praxen und Kliniken. In der Pra
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
 5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, Praxen in den Startlöchern und bestellende Kunden zuerst – und rechnet sie gleich durch.
+   **Vorschläge aus**: Standardmäßig schlägt die App nur Orthopäden vor; mit den Knöpfen darüber nimmst du z. B. Hausärzte dazu. Auch unter „Praxen auswählen“ kannst du die Gruppen ein- und ausschalten.
 6. **Feste Praxen + passende Besuche**: 1–2 Praxen auswählen (z. B. ein Termin) und **Passende Besuche ergänzen** tippen. Die App sucht fällige Praxen **auf der Strecke** (wenig Umweg) und **in der Nähe** und plant so viele ein, wie in den Tag passen (höchstens die eingestellte Zahl Besuche). Auch bei einer Wartezeit hilft **Lücke füllen**.
 7. **Packliste**: Unter „Packliste & Notizen“ trägst du ein, was du an diesem Tag allgemein brauchst, und bei jeder Praxis unter „Mitbringen“ (🎒), was du dort mitbringen willst – z. B. „Muster A, Katalog“. Daraus entsteht automatisch eine Liste zum Abhaken; gleiche Dinge erscheinen nur einmal mit allen Praxen dazu.
 8. Unterwegs: bei jedem Stopp **Navigation** (Apple Karten) und **Besuch erfassen**. Verspätet? **Ab jetzt neu planen** rechnet ab deinem aktuellen Standort und der aktuellen Uhrzeit mit den noch offenen Praxen neu.
@@ -233,7 +251,7 @@ src/
   state/filters.ts        Filter & Sortierung (gemeinsam für Liste und Karte)
   state/selectors.ts      Abgeleitete Daten (gefilterte Liste, Status-Übersicht, doppelte Standorte)
   state/duplicates.ts     Doppelte Standorte finden (Adresse, Name, Position) und zusammenführen
-  utils/kind.ts           Praxis/Klinik: Bezeichnungen und automatische Erkennung
+  utils/kind.ts           Gruppen (Orthopäden, Hausärzte, Zahn & KFO, Kliniken): Bezeichnungen und Erkennung
   utils/customer.ts       Kundenstatus (aktiv/im Gespräch/kein), Besuchsintervall, Fälligkeit
   tour/packing.ts         Packliste aus Tagesnotizen und „Mitbringen“ je Besuch
   import/xlsx-reader.ts   Excel-Leser inkl. Farberkennung (gelb = „prüfen“)
@@ -257,7 +275,7 @@ src/
 public/data/plz.geojson   PLZ-Flächen (vereinfacht), Quelle: OpenStreetMap
 scripts/fetch-plz.ts      Lädt die PLZ-Flächen von Overpass und vereinfacht sie mit mapshaper
 tests/unit/               Unit-Tests
-tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen)
+tests/e2e/smoke.mjs       Browser-Durchlauf (Gebiet, Import, Pins, Liste, Besuche, Produkte, Backup, Tour, Doppelte, Klinik, Veranstaltungen, Gruppen)
 tests/fixtures/           Erfundene Beispiel-Excel (+ Python-Skript, das sie erzeugt)
 ```
 

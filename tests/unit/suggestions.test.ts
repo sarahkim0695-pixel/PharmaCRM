@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { store } from '../../src/state/store';
 import { optimizeTour, type OptStop } from '../../src/tour/optimizer';
 import { packingList, splitItems } from '../../src/tour/packing';
-import { newTour, suggestPractices, visitPriority } from '../../src/tour/planner';
+import { newTour, suggestPractices, tourKinds, visitPriority } from '../../src/tour/planner';
+import { filterState } from '../../src/state/filters';
+import { kindCounts, listPractices, mapPractices } from '../../src/state/selectors';
 import { parseOpeningHours } from '../../src/tour/opening-hours';
 import type { Practice } from '../../src/types';
 
@@ -35,6 +37,51 @@ describe('Dringlichkeit', () => {
     const prio = (id: string) => visitPriority(store.getPractice(id)!, d);
     expect(prio('aktiv-faellig')).toBeGreaterThan(prio('aktiv-frisch'));
     expect(prio('gespraech')).toBeGreaterThan(prio('kein'));
+  });
+});
+
+describe('Gruppen: Reiter, Karte und Tour-Vorschläge', () => {
+  const mixed = () => [
+    p('ortho', 48.537, 12.152, { city: 'Landshut', specialty: 'Orthopädie' }),
+    p('haus', 48.538, 12.153, { city: 'Landshut', specialty: 'Allgemeinmedizin' }),
+    p('zahn', 48.539, 12.154, { city: 'Landshut', specialty: 'Kieferorthopädie' }),
+    p('klinik', 48.540, 12.155, { city: 'Landshut', kind: 'klinik' }),
+  ];
+
+  it('beim Start: Liste und Karte zeigen nur Orthopäden', async () => {
+    await store.savePractices(mixed());
+    filterState.reset();
+    expect(filterState.listKind).toBe('ortho');
+    expect(filterState.mapKinds).toEqual(['ortho']);
+    expect(listPractices().map((x) => x.id)).toEqual(['ortho']);
+    expect(mapPractices().map((x) => x.id)).toEqual(['ortho']);
+    expect(Object.fromEntries(Object.entries(kindCounts()).map(([k, v]) => [k, v.total]))).toEqual({ ortho: 1, hausarzt: 1, zahn: 1, klinik: 1 });
+  });
+
+  it('Reiter wechseln und auf der Karte mehrere Gruppen zeigen', async () => {
+    await store.savePractices(mixed());
+    filterState.setListKind('hausarzt');
+    expect(listPractices().map((x) => x.id)).toEqual(['haus']);
+    filterState.setMapKinds(['hausarzt', 'ortho']);
+    expect(mapPractices().map((x) => x.id).sort()).toEqual(['haus', 'ortho']);
+    filterState.showOnMap('klinik'); // z. B. „Auf Karte zeigen“ bei einer Klinik
+    expect(filterState.mapKinds).toContain('klinik');
+    // Suche zählt je Gruppe
+    filterState.update({ search: 'Praxis zahn' });
+    expect(kindCounts().zahn.filtered).toBe(1);
+    expect(kindCounts().ortho.filtered).toBe(0);
+    filterState.reset();
+    filterState.setListKind('ortho');
+    filterState.setMapKinds(['ortho']);
+  });
+
+  it('Tour-Vorschläge nur aus den gewählten Gruppen (Standard: Orthopäden)', async () => {
+    await store.savePractices(mixed());
+    const tour = { ...newTour(DATE), region: { cities: ['Landshut'], radiusKm: 0 } };
+    expect(tourKinds(tour)).toEqual(['ortho']);
+    expect(suggestPractices(tour).map((s) => s.practice.id)).toEqual(['ortho']);
+    const both = { ...tour, kinds: ['ortho', 'hausarzt'] as const };
+    expect(suggestPractices({ ...both, kinds: [...both.kinds] }).map((s) => s.practice.id).sort()).toEqual(['haus', 'ortho']);
   });
 });
 

@@ -7,9 +7,9 @@
  * Optional: Öffnungszeiten (eine Spalte „Öffnungszeiten“ ODER Spalten „Mo“, „Di“ …),
  * „Parken (Min)“ und „Vor Ort (Min)“ für den Zeitaufwand bei der Tourplanung.
  *
- * Kliniken: Spalte „Typ“ (Praxis/Klinik) ODER eigenes Tabellenblatt „Kliniken“ –
- * alle Blätter mit passender Kopfzeile werden eingelesen. Ohne Angabe wird die
- * Art am Namen erkannt („Klinik“, „Klinikum“, „Krankenhaus“).
+ * Gruppen (Orthopäden, Hausärzte, Zahnärzte & KFO, Kliniken): Spalte „Typ“, Name des
+ * Tabellenblatts, Fachrichtung oder Name – siehe detectKind() in utils/kind.ts.
+ * Alle Blätter mit passender Kopfzeile werden eingelesen.
  * Doppelte Zeilen (gleicher Name + gleiche Adresse) werden übersprungen.
  *
  * Gelb hinterlegte Zeilen werden als „prüfen“ markiert.
@@ -18,7 +18,7 @@
  */
 import { parseDayCell, parseOpeningHours } from '../tour/opening-hours';
 import type { FacilityKind, Practice, WeekHours } from '../types';
-import { detectKind, kindOf, type KindSource } from '../utils/kind';
+import { detectKind, KIND_KEYS, kindOf, type KindSource } from '../utils/kind';
 import { parseInterval } from '../utils/customer';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -86,7 +86,7 @@ export const FIELD_LABELS: Record<Field, string> = {
   hours: 'Öffnungszeiten',
   park: 'Parken (Min)',
   visit: 'Vor Ort (Min)',
-  kind: 'Typ (Praxis/Klinik)',
+  kind: 'Typ (z. B. Hausarzt, Zahnarzt, Klinik)',
   interval: 'Intervall',
 };
 
@@ -253,12 +253,25 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
     hoursCount: rows.filter((r) => r.openingHours).length,
     hoursProblems: parts.flatMap((p) => p.hoursProblems),
     duplicateRows,
-    kindCounts: {
-      praxis: rows.filter((r) => r.kind === 'praxis').length,
-      klinik: rows.filter((r) => r.kind === 'klinik').length,
-    },
+    kindCounts: countKinds(rows),
   };
 }
+
+/** Anzahl Zeilen je Gruppe */
+export function countKinds(rows: Pick<ImportRow, 'kind'>[]): Record<FacilityKind, number> {
+  const out = Object.fromEntries(KIND_KEYS.map((k) => [k, 0])) as Record<FacilityKind, number>;
+  for (const r of rows) out[r.kind]++;
+  return out;
+}
+
+/** „Alle Einträge dieser Datei sind …“: Gruppe für alle Zeilen festlegen */
+export function withKind(rows: ImportRow[], kind: FacilityKind): ImportRow[] {
+  return rows.map((r) => ({ ...r, kind, kindSource: 'file' }));
+}
+
+/** Gruppe nur speichern, wenn sie eindeutig angegeben ist – sonst ergibt sie sich aus der Fachrichtung */
+const explicitKind = (row: ImportRow) =>
+  row.kindSource === 'file' || row.kindSource === 'column' || row.kindSource === 'sheet' || row.kind === 'klinik';
 
 function readRows(
   sheet: SheetData,
@@ -282,7 +295,7 @@ function readRows(
     }
     const yellow =
       isYellow(sheet.rowFills[r]) || usedCols.some((c) => isYellow(cells[c]?.fill));
-    const kind = detectKind(name, get('kind'), sheet.name);
+    const kind = detectKind(name, get('kind'), sheet.name, get('specialty'));
     const row: ImportRow = {
       rowNumber: r + 1,
       sheetName: sheet.name,
@@ -349,7 +362,7 @@ export function newPracticeFromRow(row: ImportRow): Practice {
   const ts = nowIso();
   return {
     id: newId(),
-    kind: row.kind,
+    ...(explicitKind(row) ? { kind: row.kind } : {}),
     name: row.name,
     specialty: row.specialty,
     street: row.street,
@@ -420,8 +433,9 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       needsReview: row.needsReview,
       // leere Zellen überschreiben nichts, was in der App gepflegt wurde
       ...timeFields(row),
-      // Art nur bei eindeutiger Angabe ändern (Spalte, Blatt, Name)
-      kind: row.kindSource === 'default' || (row.kind === 'praxis' && !match.kind) ? match.kind : row.kind,
+      // Gruppe nur bei eindeutiger Angabe ändern (Auswahl beim Import, Spalte, Blatt, Klinik im Namen);
+      // sonst bleibt eine in der App gewählte Gruppe – der alte Wert „praxis“ wird aus der Fachrichtung erkannt
+      kind: explicitKind(row) ? row.kind : match.kind === 'praxis' ? undefined : match.kind,
     };
     if (next.kind === undefined) delete next.kind;
     // Kundenstatus: In der App gesetzt bleibt er, bis sich der Status in der Excel ändert
@@ -432,9 +446,9 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       delete next.lng;
       delete next.geoLabel;
     }
-    const changed = (Object.keys(next) as (keyof Practice)[]).some(
-      (k) => JSON.stringify(next[k]) !== JSON.stringify(match[k]),
-    );
+    // auch entfernte Felder zählen als Änderung (z. B. alter Wert „praxis“)
+    const keys = new Set([...Object.keys(next), ...Object.keys(match)] as (keyof Practice)[]);
+    const changed = [...keys].some((k) => JSON.stringify(next[k]) !== JSON.stringify(match[k]));
     if (changed) {
       toSave.push(next);
       updated++;
