@@ -1,15 +1,15 @@
 /**
  * Filter und Sortierung für Liste UND Karte (beide zeigen dieselbe Auswahl).
+ * Die Gruppe (Orthopäden, Hausärzte …) wählt man getrennt: in der Liste per Reiter,
+ * auf der Karte per Gruppen-Knöpfen. Beim Öffnen der App: nur Orthopäden.
  */
 import type { EventInterest, FacilityKind, Practice, ProductState, Visit } from '../types';
-import { kindOf } from '../utils/kind';
 import { STATE_KEYS, stateKeyOf, type StateKey } from '../utils/customer';
 import { daysSince } from '../utils/dates';
 import { collator, normalize } from '../utils/text';
 
 export interface PracticeFilter {
   search: string;
-  kinds: FacilityKind[]; // Praxis / Klinik
   statuses: StateKey[]; // Kundenstatus: aktiv, prozess, kein, offen
   cities: string[];
   specialties: string[];
@@ -49,7 +49,6 @@ export const SORT_LABELS: Record<SortKey, string> = {
 
 export const EMPTY_FILTER: PracticeFilter = {
   search: '',
-  kinds: [],
   statuses: [],
   cities: [],
   specialties: [],
@@ -76,7 +75,6 @@ export interface FilterContext {
 /** Wie viele Filter sind aktiv (ohne Suchtext)? */
 export function activeFilterCount(f: PracticeFilter): number {
   return (
-    (f.kinds?.length ? 1 : 0) +
     (f.statuses.length ? 1 : 0) +
     (f.cities.length ? 1 : 0) +
     (f.specialties.length ? 1 : 0) +
@@ -104,7 +102,6 @@ export function matchesFilter(p: Practice, f: PracticeFilter, ctx: FilterContext
     const words = normalize(f.search).split(' ').filter(Boolean);
     if (!words.every((w) => hay.includes(w))) return false;
   }
-  if (f.kinds?.length && !f.kinds.includes(kindOf(p))) return false;
   if (f.statuses.length && !f.statuses.includes(stateKeyOf(p))) return false;
   if (f.cities.length && !f.cities.includes(p.city)) return false;
   if (f.specialties.length && !f.specialties.includes(p.specialty)) return false;
@@ -179,10 +176,17 @@ export function sortPractices(
 
 const STORAGE_KEY = 'repmap.filter';
 
+/** Gruppe beim Öffnen der App */
+export const START_KIND: FacilityKind = 'ortho';
+
 class FilterState {
   filter: PracticeFilter = { ...EMPTY_FILTER };
   sort: SortKey = 'name';
   position: { lat: number; lng: number } | null = null;
+  /** Reiter in der Liste (wird nicht gespeichert → beim Start Orthopäden) */
+  listKind: FacilityKind = START_KIND;
+  /** Gruppen auf der Karte (wird nicht gespeichert → beim Start nur Orthopäden) */
+  mapKinds: FacilityKind[] = [START_KIND];
   private listeners = new Set<() => void>();
 
   constructor() {
@@ -190,6 +194,7 @@ class FilterState {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
       if (saved) {
         this.filter = { ...EMPTY_FILTER, ...saved.filter, search: '' };
+        delete (this.filter as Partial<PracticeFilter> & { kinds?: unknown }).kinds; // alter Praxis/Klinik-Filter
         // alte gespeicherte Status-Filter (freier Text) verwerfen
         this.filter.statuses = (this.filter.statuses ?? []).filter((s) => STATE_KEYS.includes(s));
         this.sort = saved.sort === 'distance' ? 'name' : (saved.sort ?? 'name');
@@ -207,6 +212,21 @@ class FilterState {
   update(patch: Partial<PracticeFilter>): void {
     this.filter = { ...this.filter, ...patch };
     this.changed();
+  }
+
+  setListKind(kind: FacilityKind): void {
+    this.listKind = kind;
+    this.changed();
+  }
+
+  setMapKinds(kinds: FacilityKind[]): void {
+    this.mapKinds = [...new Set(kinds)];
+    this.changed();
+  }
+
+  /** Sorgt dafür, dass eine Gruppe auf der Karte sichtbar ist (z. B. „Auf Karte zeigen“) */
+  showOnMap(kind: FacilityKind): void {
+    if (!this.mapKinds.includes(kind)) this.setMapKinds([...this.mapKinds, kind]);
   }
 
   setSort(sort: SortKey): void {

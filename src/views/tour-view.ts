@@ -8,9 +8,10 @@ import { filterContext } from '../state/selectors';
 import { store } from '../state/store';
 import { practiceDurations } from '../tour/durations';
 import { formatRanges, formatTime, hoursOn, parseTime } from '../tour/opening-hours';
-import { addAppointments, appointmentOn, computePlan, newTour, suggestPractices, visitedOn, type PlanOptions } from '../tour/planner';
+import { addAppointments, appointmentOn, computePlan, newTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
+import { KIND_KEYS, KIND_PLURAL, kindOf } from '../utils/kind';
 import { ROUTING_ATTRIBUTION, type LatLng } from '../tour/travel';
-import type { PlanEntry, Practice, Tour } from '../types';
+import type { FacilityKind, PlanEntry, Practice, Tour } from '../types';
 import { confirmDialog, openSheet } from '../ui/dialog';
 import { h, setChildren, type Child } from '../ui/dom';
 import { iconEl } from '../ui/icons';
@@ -349,9 +350,32 @@ export function tourView(route: Route): View {
   function regionCard() {
     const r = tour.region ?? { cities: [], radiusKm: 10 };
     const setRegion = (cities: string[], radiusKm = r.radiusKm) => change((t) => (t.region = cities.length ? { cities, radiusKm } : undefined));
+    // Aus welchen Gruppen Vorschläge kommen (nur Gruppen mit Einträgen; bei nur einer keine Auswahl)
+    const present = new Set(store.practiceList().map((p) => kindOf(p)));
+    const kinds = new Set(tourKinds(tour));
+    const shownKinds = KIND_KEYS.filter((k) => present.has(k) || kinds.has(k));
+    const toggleKind = (k: FacilityKind) => {
+      const next = new Set(kinds);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      if (!next.size) return toast('Mindestens eine Gruppe auswählen.');
+      change((t) => (t.kinds = KIND_KEYS.filter((x) => next.has(x))));
+    };
     return section(
       'Wohin? (optional)',
       h('p', { class: 'muted small' }, 'Ort oder Region wählen – die App stellt eine passende Tour zusammen (fällige Besuche, Startlöcher und bestellende Kunden zuerst).'),
+      shownKinds.length > 1
+        ? h(
+            'div',
+            { class: 'tour-kinds' },
+            h('span', { class: 'field-label' }, 'Vorschläge aus'),
+            h(
+              'div',
+              { class: 'chip-select' },
+              shownKinds.map((k) => h('button', { class: ['chip-toggle', kinds.has(k) && 'on'], 'aria-pressed': String(kinds.has(k)), onclick: () => toggleKind(k) }, KIND_PLURAL[k])),
+            ),
+          )
+        : null,
       h(
         'div',
         { class: 'chips region-chips' },
@@ -583,6 +607,8 @@ function openPicker(tour: Tour, onApply: (ids: string[]) => void): void {
   let onlyOpen = true;
   let onlyStale = false;
   let onlyTerritory = false;
+  const kinds = new Set(tourKinds(tour));
+  const present = new Set(store.practiceList().map((p) => kindOf(p)));
 
   const search = h('input', { type: 'search', placeholder: 'Suchen: Name, Ort, PLZ …', autocomplete: 'off', oninput: () => render() });
   const chips = h('div', { class: 'chip-select' });
@@ -597,6 +623,11 @@ function openPicker(tour: Tour, onApply: (ids: string[]) => void): void {
   function render() {
     setChildren(
       chips,
+      present.size > 1
+        ? KIND_KEYS.filter((k) => present.has(k)).map((k) =>
+            toggleChip(KIND_PLURAL[k], kinds.has(k), (v) => (v ? kinds.add(k) : kinds.delete(k))),
+          )
+        : null,
       toggleChip('an dem Tag geöffnet', onlyOpen, (v) => (onlyOpen = v)),
       toggleChip('Besuch fällig', onlyStale, (v) => (onlyStale = v)),
       toggleChip('im Gebiet', onlyTerritory, (v) => (onlyTerritory = v)),
@@ -606,6 +637,7 @@ function openPicker(tour: Tour, onApply: (ids: string[]) => void): void {
       .practiceList()
       .filter((p) => {
         if (words.length && !words.every((w) => normalize(`${p.name} ${p.city} ${p.plz} ${p.specialty}`).includes(w))) return false;
+        if (present.size > 1 && !kinds.has(kindOf(p))) return false;
         const open = hoursOn(p.openingHours, date);
         if (onlyOpen && open && !open.length) return false;
         if (onlyStale && !isStale(p, ctx)) return false;

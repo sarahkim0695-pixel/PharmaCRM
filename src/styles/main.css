@@ -426,6 +426,9 @@ button.stat:disabled { opacity: 0.6; }
   cursor: pointer;
 }
 .seg.on { background: #fff; color: var(--text); box-shadow: var(--shadow); }
+@media (max-width: 520px) {
+  .segmented-kind { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .appt { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--primary-soft); margin-bottom: 12px; color: var(--primary-dark); }
 .appt-date { font-weight: 700; font-size: 18px; color: var(--text); }
 .appt-note { margin-top: 2px; color: var(--text); }
@@ -487,6 +490,11 @@ button.stat:disabled { opacity: 0.6; }
 .quick-preview { min-height: 24px; font-size: 14px; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .quick-preview .ok { color: var(--ok); display: inline-flex; gap: 4px; align-items: center; }
 .quick-preview .bad { color: var(--warn); display: inline-flex; gap: 4px; align-items: center; }
+
+.hours-examples { list-style: none; margin: 0 0 8px; padding: 0; }
+.hours-examples li { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 10px; background: #f4f6f9; margin-bottom: 6px; }
+.hours-examples li span { color: var(--muted); font-size: 15px; }
+.hours-preview code { background: #eef2f7; padding: 1px 6px; border-radius: 6px; font-size: 0.95em; white-space: nowrap; }
 
 /* ---------- Tourplanung ---------- */
 
@@ -612,6 +620,48 @@ button.stat:disabled { opacity: 0.6; }
 }
 .popup-tour { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
 
+.tour-kinds { margin: 4px 0 10px; }
+.tour-kinds .field-label { display: block; margin-bottom: 6px; }
+
+/* ---------- Reiter: Orthopäden / Hausärzte / Zahnärzte & KFO / Kliniken ---------- */
+
+.kind-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 12px;
+  border-radius: 14px;
+  background: #e3e8ef;
+}
+.kind-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+}
+.kind-tab.on { background: #fff; color: var(--primary-dark); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.kind-tab.empty:not(.on) { opacity: 0.6; }
+.kind-tab-count { font-size: 13px; font-weight: 500; color: var(--muted); }
+.kind-tab.on .kind-tab-count { color: var(--primary); }
+@media (max-width: 520px) {
+  .kind-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kind-tab { flex-direction: row; gap: 6px; min-height: 46px; }
+}
+
 /* ---------- Kliniken & doppelte Standorte ---------- */
 
 .badge-kind { background: #e8e1f5; color: #4b2a85; }
@@ -621,6 +671,18 @@ button.stat:disabled { opacity: 0.6; }
 .pin-klinik span::before, .pin-klinik span::after { content: ''; position: absolute; background: #fff; }
 .pin-klinik span::before { left: 3.5px; top: 0; width: 3px; height: 10px; }
 .pin-klinik span::after { left: 0; top: 3.5px; width: 10px; height: 3px; }
+.pin-mini-plain { border-color: #fff; box-shadow: 0 0 0 1px #8a94a6; }
+.pin-mini-letter {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: #8a94a6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
 .pin-mini-klinik { border-radius: 3px; border-color: #fff; box-shadow: 0 0 0 1px #8a94a6; }
 .dup-card { border-left: 4px solid var(--warn); }
 .dup-reason { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--warn); margin-bottom: 8px; }
@@ -838,6 +900,48 @@ dialog.sheet::backdrop { background: rgba(10, 20, 40, 0.4); }
   font-weight: 600;
   box-shadow: var(--shadow-strong);
 }
+/* Gruppen-Knöpfe auf der Karte */
+.map-kinds {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.map-kind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  border: 2px solid transparent;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: var(--shadow-strong);
+  cursor: pointer;
+}
+.map-kind.on { background: #fff; color: var(--text); border-color: var(--primary); }
+.map-kind-check {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #c5ccd6;
+  font-size: 14px;
+  color: #fff;
+}
+.map-kind.on .map-kind-check { background: var(--primary); border-color: var(--primary); }
+.map-kind-count { font-weight: 500; color: var(--muted); font-size: 13px; }
+@media (max-width: 520px) {
+  .map-kinds { gap: 6px; }
+  .map-kind { min-height: 40px; padding: 0 10px 0 7px; font-size: 14px; gap: 5px; }
+  .map-kind-check { width: 20px; height: 20px; font-size: 12px; }
+}
 .map-side {
   position: absolute;
   top: calc(var(--safe-top) + 10px);
@@ -981,6 +1085,16 @@ dialog.sheet::backdrop { background: rgba(10, 20, 40, 0.4); }
   margin: -3.5px 0 0 -3.5px;
   border-radius: 50%;
   background: #fff;
+}
+.pin-letter span {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: none;
+  color: #fff;
+  font: 800 13px/16px system-ui, -apple-system, sans-serif;
+  text-align: center;
+  transform: rotate(45deg);
 }
 .pin-review { border-color: var(--review); border-width: 3.5px; }
 .pin-approx { border-style: dashed; }

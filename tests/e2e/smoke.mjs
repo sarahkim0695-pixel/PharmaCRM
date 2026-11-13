@@ -136,11 +136,22 @@ try {
   await chooser.setFiles(fixture);
   await page.waitForSelector('text=Vorschau');
   const statsText = await page.locator('.stats').innerText();
-  assert.match(statsText, /9\s*Praxen/);
+  assert.match(statsText, /5\s*Orthopäden/);
+  assert.match(statsText, /2\s*Hausärzte/);
+  assert.match(statsText, /2\s*Zahnärzte & KFO/);
   assert.match(statsText, /2\s*Kliniken/);
   assert.match(statsText, /1\s*doppelte Zeilen aussortiert/);
   assert.match(statsText, /4\s*gelb/);
+  // Öffnungszeiten aus der Datei: Quelle, Anzahl und Beispiele zum Prüfen
+  const hoursText = await page.locator('.hours-preview').innerText();
+  assert.match(hoursText, /Bei 7 von 11 Einträgen übernommen – aus Spalte „Öffnungszeiten“/);
+  assert.match(hoursText, /Praxis Dr\. Anna Beispiel\s*Mo, Di, Do 08:00–12:00, 14:00–18:00/);
+  assert.match(hoursText, /Nicht lesbar: 1/);
   await shot('03-import-vorschau');
+  if (shots) {
+    await page.locator('.hours-preview').scrollIntoViewIfNeeded();
+    await shot('03b-import-oeffnungszeiten');
+  }
   await page.getByRole('button', { name: 'Importieren' }).click();
   await page.waitForSelector('text=Import abgeschlossen');
 
@@ -148,9 +159,12 @@ try {
   await page.getByRole('button', { name: 'Zur Karte' }).click();
   await page.waitForFunction(() => !document.querySelector('.map-progress') || document.querySelector('.map-progress')?.hasAttribute('hidden'), null, { timeout: real ? 240_000 : 90_000 });
   await page.waitForTimeout(800);
-  const pins = await page.locator('.pin-wrap').count();
-  const clusters = await page.locator('.cluster').count();
-  assert.ok(pins + clusters >= 5, `zu wenige Pins: ${pins} + ${clusters} Cluster`);
+  // Beim Start nur Orthopäden (4 mit Adresse – „Praxis Unbekannt“ wurde nicht gefunden)
+  const markerCount = () =>
+    page.evaluate(() => document.querySelectorAll('.pin-wrap').length + [...document.querySelectorAll('.cluster')].reduce((n, c) => n + Number(c.textContent), 0));
+  assert.equal(await page.locator('.map-kind.on').count(), 1);
+  assert.match(await page.locator('.map-kind.on').innerText(), /Orthopäden/);
+  assert.equal(await markerCount(), 4);
   await shot('04-karte-pins');
 
   // 5. Pin antippen → Kurzinfo
@@ -158,19 +172,53 @@ try {
   await page.waitForSelector('.popup');
   assert.ok(await page.locator('.popup a', { hasText: 'Route' }).getAttribute('href').then((h) => h.startsWith('https://maps.apple.com/')));
   await shot('05-popup');
+  await page.keyboard.press('Escape');
+
+  // 5b. Karte: Hausärzte dazunehmen, dann nur Hausärzte; nach Neustart wieder nur Orthopäden
+  // (herauszoomen, damit alle Pins im Ausschnitt liegen)
+  await page.getByRole('button', { name: 'Verkleinern' }).click();
+  await page.getByRole('button', { name: 'Verkleinern' }).click();
+  await page.waitForTimeout(600);
+  assert.equal(await markerCount(), 4);
+  await page.locator('.map-kind', { hasText: 'Hausärzte' }).click();
+  await page.waitForSelector('.map-kind.on:has-text("Hausärzte")');
+  await page.waitForFunction(() => document.querySelectorAll('.map-kind.on').length === 2);
+  await page.waitForTimeout(400);
+  assert.equal(await markerCount(), 6);
+  await shot('05b-karte-orthopaeden-hausaerzte');
+  await page.locator('.map-kind', { hasText: 'Orthopäden' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.map-kind.on').length === 1);
+  await page.waitForTimeout(400);
+  assert.equal(await markerCount(), 2);
+  await page.reload();
+  await page.waitForSelector('.map-kind.on');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.map-kind.on').count(), 1);
+  assert.match(await page.locator('.map-kind.on').innerText(), /Orthopäden/);
 
   // 6. Liste: Suche, Filter „prüfen“
   await page.goto(`${BASE}#/liste`);
   await page.waitForSelector('.prow');
-  assert.equal(await page.locator('.prow').count(), 11);
-  assert.equal(await page.locator('.prow .badge-review').count(), 4);
-  assert.equal(await page.locator('.prow .badge-kind').count(), 2); // Kliniken
+  // Reiter: beim Start Orthopäden
+  assert.match(await page.locator('.kind-tab.on').innerText(), /Orthopäden\s*5/);
+  assert.match(await page.locator('.kind-tabs').innerText(), /Hausärzte\s*2[\s\S]*Zahnärzte & KFO\s*2[\s\S]*Kliniken\s*2/);
+  assert.equal(await page.locator('.prow').count(), 5);
+  assert.equal(await page.locator('.prow .badge-review').count(), 1); // Rosenheim
+  await shot('06-liste');
+  await page.locator('.kind-tab', { hasText: 'Hausärzte' }).click();
+  await page.waitForSelector('.kind-tab.on:has-text("Hausärzte")');
+  assert.equal(await page.locator('.prow').count(), 2);
+  await shot('06b-liste-hausaerzte');
+  // Suche findet „Passau“ (Zahnarzt) → Hinweis auf den anderen Reiter
   await page.fill('.search-input', 'passau');
-  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Zahnärzte & KFO: 1' }).click();
+  await page.waitForSelector('.kind-tab.on:has-text("Zahnärzte")');
   assert.equal(await page.locator('.prow').count(), 1);
   await page.fill('.search-input', '');
   await page.waitForTimeout(400);
-  await shot('06-liste');
+  assert.equal(await page.locator('.prow').count(), 2); // Praxis am Dom + Praxis Allgäu (Kieferorthopädie)
+  await page.locator('.kind-tab', { hasText: 'Orthopäden' }).click();
+  await page.waitForSelector('.kind-tab.on:has-text("Orthopäden")');
 
   // 7. Nicht gefundene Praxis → Pin von Hand setzen
   await page.locator('.prow', { hasText: 'Praxis Unbekannt' }).click();
@@ -197,6 +245,8 @@ try {
   await page.fill('input[name=plz]', '80331');
   await page.waitForTimeout(300);
   assert.equal(await page.inputValue('input[name=city]'), 'München'); // Ort aus PLZ ergänzt
+  assert.equal(await page.getByRole('radio', { name: 'Orthopädie' }).getAttribute('aria-checked'), 'true'); // vom Reiter
+  await shot('09b-neuer-eintrag');
   await page.getByRole('button', { name: 'Speichern' }).click();
   await page.waitForSelector('.detail-name:has-text("Testpraxis Neu")');
 
@@ -219,7 +269,8 @@ try {
   assert.match(await page.locator('.appt-side').first().innerText(), /14:30/);
   await shot('11-besuche-termine');
   await page.getByRole('tab', { name: 'Fällig' }).click();
-  assert.equal(await page.locator('.plist .prow').count(), 11); // alle außer der gerade besuchten
+  assert.equal(await page.locator('.plist .prow').count(), 5); // Orthopäden außer der gerade besuchten
+  assert.match(await page.locator('.kind-tab.on').innerText(), /Orthopäden\s*5/);
   await shot('12-besuche-lange');
   await page.getByRole('tab', { name: 'Verlauf' }).click();
   await page.waitForSelector('.visit-practice:has-text("Testpraxis Neu")');
@@ -274,7 +325,7 @@ try {
   await page.goto(`${BASE}#/liste`);
   await page.fill('.search-input', '');
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('.prow').count(), 12);
+  assert.equal(await page.locator('.prow').count(), 6); // Orthopäden inkl. Testpraxis
   await page.locator('.prow', { hasText: 'Testpraxis Neu' }).click();
   await page.waitForSelector('[aria-label="Wundauflage A"] .seg-kauft.on');
   await page.waitForSelector('.visit-note:has-text("Muster dagelassen")');
@@ -314,6 +365,7 @@ try {
   await page.waitForSelector('text=Noch keine Praxen');
   await page.getByRole('button', { name: 'Praxen auswählen' }).click();
   await page.waitForSelector('.pick');
+  await page.locator('dialog .chip-toggle', { hasText: 'Hausärzte' }).click(); // Hausärzte dazunehmen
   const picks = page.locator('.pick:not(.already)');
   for (let i = 0; i < 6; i++) await picks.nth(i).click();
   await page.getByRole('button', { name: /Übernehmen \(6\)/ }).click();
@@ -356,12 +408,12 @@ try {
   await page.goto(`${BASE}#/liste`);
   await page.fill('.search-input', '');
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('.prow').count(), 11);
+  assert.equal(await page.locator('.prow').count(), 5);
   assert.equal(await page.locator('.prow', { hasText: 'Anna Beispiel' }).count(), 0);
 
   // 20. Klinik von Hand anlegen
   await page.goto(`${BASE}#/praxis/neu`);
-  await page.getByRole('button', { name: 'Klinik', exact: true }).click();
+  await page.getByRole('radio', { name: 'Klinik', exact: true }).click();
   await page.fill('input[name=name]', 'Kreisklinik Test');
   await page.getByRole('button', { name: 'Speichern' }).click();
   await page.waitForSelector('.page-head h1:has-text("Klinik")');
@@ -425,7 +477,7 @@ try {
   await page.locator('.prow', { hasText: 'Wundforum' }).click();
   await page.locator('dialog').getByRole('button', { name: /noch nicht angefragt \(11\)/ }).click();
   await page.waitForSelector('.chip:has-text("Wundforum Augsburg: noch nicht angefragt")');
-  assert.equal(await page.locator('.prow').count(), 11);
+  assert.equal(await page.locator('.prow').count(), 4); // Orthopäden ohne Testpraxis
   assert.equal(await page.locator('.prow', { hasText: 'Testpraxis Neu' }).count(), 0);
 
   // 24. Mehrere bearbeiten: Status + Intervall für alle angezeigten
@@ -434,8 +486,8 @@ try {
   await page.locator('dialog select').selectOption('21');
   await shot('24-mehrere-bearbeiten');
   await page.locator('dialog').getByRole('button', { name: 'Übernehmen' }).click();
-  await page.locator('dialog', { hasText: '11 Einträge werden geändert' }).getByRole('button', { name: 'Übernehmen' }).click();
-  await page.waitForSelector('.toast:has-text("11 Einträge geändert")');
+  await page.locator('dialog', { hasText: '4 Einträge werden geändert' }).getByRole('button', { name: 'Übernehmen' }).click();
+  await page.waitForSelector('.toast:has-text("4 Einträge geändert")');
   await page.locator('.prow').first().click();
   await page.waitForSelector('.state-btn.on:has-text("In den Startlöchern")');
   await page.waitForSelector('.chip-toggle.on:has-text("3 Wochen")');
@@ -445,6 +497,20 @@ try {
   await page.waitForSelector('.tl-ask:has-text("Wundforum Augsburg")', { timeout: 30_000 });
   await page.locator('.tl-ask').first().scrollIntoViewIfNeeded();
   await shot('25-tour-anfragen');
+
+  // 26. Hausarzt „Auf Karte“ → Gruppe wird auf der Karte eingeblendet, Pin mit „H“
+  await page.goto(`${BASE}#/liste`);
+  await page.fill('.search-input', '');
+  await page.locator('.chip', { hasText: 'Wundforum' }).click().catch(() => {});
+  await page.locator('.kind-tab', { hasText: 'Hausärzte' }).click();
+  await page.locator('.prow', { hasText: 'Hausarztpraxis Muster' }).click();
+  await page.waitForSelector('.page-head h1:has-text("Hausarzt")');
+  await page.getByRole('button', { name: 'Auf Karte' }).click();
+  await page.waitForSelector('.popup-title:has-text("Hausarztpraxis Muster")');
+  assert.match(await page.locator('.popup-sub').innerText(), /Hausarzt · Innere Medizin/);
+  assert.ok(await page.locator('.map-kind.on', { hasText: 'Hausärzte' }).count(), 'Hausärzte nicht eingeblendet');
+  assert.ok(await page.locator('.pin-letter').count() >= 1, 'kein Pin mit Buchstabe');
+  await shot('26-karte-hausarzt');
 
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');

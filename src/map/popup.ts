@@ -24,7 +24,7 @@ export function buildPopup(p: Practice): HTMLElement {
     'div',
     { class: 'popup' },
     h('div', { class: 'popup-title' }, p.name),
-    h('div', { class: 'popup-sub' }, [kindOf(p) === 'klinik' ? KIND_LABEL.klinik : '', p.specialty].filter(Boolean).join(' · ')),
+    h('div', { class: 'popup-sub' }, [KIND_LABEL[kindOf(p)], p.specialty].filter(Boolean).join(' · ')),
     h('div', { class: 'popup-addr' }, fullAddress(p)),
     h(
       'div',

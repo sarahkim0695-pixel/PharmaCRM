@@ -84,7 +84,7 @@ export function duplicatesView(): View {
                 h(
                   'span',
                   { class: 'badges' },
-                  kindOf(p) === 'klinik' && h('span', { class: 'badge badge-kind' }, KIND_LABEL.klinik),
+                  h('span', { class: 'badge badge-kind' }, KIND_LABEL[kindOf(p)]),
                   h('span', { class: 'badge badge-soft', style: { '--badge': practiceColor(p, store.settings) } }, STATE_LABEL[stateKeyOf(p)]),
                   h('span', { class: 'badge badge-info' }, plural(visits, 'Besuch', 'Besuche')),
                   products ? h('span', { class: 'badge badge-info' }, plural(products, 'Produkt', 'Produkte')) : null,

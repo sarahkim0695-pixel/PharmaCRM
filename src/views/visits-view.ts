@@ -8,7 +8,10 @@ import { h, setChildren } from '../ui/dom';
 import { iconEl } from '../ui/icons';
 import { dueInfo, formatInterval, practiceColor, STATE_LABEL, stateColor, stateKeyOf, type StateKey } from '../utils/customer';
 import { daysBetween, formatDate, formatDateShort, parseDate, relativeDays, todayStr } from '../utils/dates';
-import { collator, plural } from '../utils/text';
+import { collator } from '../utils/text';
+import { KIND_KEYS, kindCountText, kindOf } from '../utils/kind';
+import type { FacilityKind } from '../types';
+import { kindTabs } from './list-view';
 import { emptyState, pageHeader, type View } from './common';
 import { visitItem } from './visits-section';
 
@@ -41,9 +44,9 @@ export function visitsView(): View {
     );
   }
 
-  const unsub = store.subscribe(render);
+  const unsubs = [store.subscribe(render), filterState.subscribe(() => tab === 'lange' && render())];
   render();
-  return { el, destroy: unsub };
+  return { el, destroy: () => unsubs.forEach((u) => u()) };
 }
 
 function summary(): HTMLElement {
@@ -120,11 +123,17 @@ function appointments(): HTMLElement {
 
 function stale(rerender: () => void): HTMLElement {
   const ctx = filterContext();
-  const list = store
+  // Reiter wie in der Liste (gleiche Auswahl)
+  const kind = filterState.listKind;
+  const dueAll = store
     .practiceList()
     .filter((p) => isStale(p, ctx))
     .filter((p) => includeNever || store.lastVisit(p.id))
-    .filter((p) => !staleStatuses.size || staleStatuses.has(stateKeyOf(p)))
+    .filter((p) => !staleStatuses.size || staleStatuses.has(stateKeyOf(p)));
+  const counts = Object.fromEntries(KIND_KEYS.map((k) => [k, { total: 0, filtered: 0 }])) as Record<FacilityKind, { total: number; filtered: number }>;
+  for (const p of dueAll) counts[kindOf(p)].total++;
+  const list = dueAll
+    .filter((p) => kindOf(p) === kind)
     .map((p) => {
       const last = store.lastVisit(p.id)?.date;
       return { p, last, due: dueInfo(p, last, store.settings) };
@@ -152,6 +161,7 @@ function stale(rerender: () => void): HTMLElement {
   return h(
     'div',
     null,
+    h('div', { class: 'kind-tabs', role: 'tablist', 'aria-label': 'Gruppe' }, kindTabs(kind, counts, false, (k) => filterState.setListKind(k))),
     h('p', { class: 'muted small' }, 'Besuch fällig laut Besuchsintervall der Praxis (sonst Standard je Kundenstatus, änderbar unter Mehr → Einstellungen).'),
     h('div', { class: 'chip-select' }, chips),
     h(
@@ -163,7 +173,7 @@ function stale(rerender: () => void): HTMLElement {
     h(
       'div',
       { class: 'row list-actions' },
-      h('span', { class: 'list-count grow' }, plural(list.length, 'Praxis', 'Praxen')),
+      h('span', { class: 'list-count grow' }, kindCountText(list.length, kind)),
       h(
         'button',
         {
@@ -171,6 +181,7 @@ function stale(rerender: () => void): HTMLElement {
           onclick: () => {
             filterState.reset();
             filterState.update({ stale: true, statuses: [...staleStatuses] });
+            filterState.setMapKinds([kind]);
             navigate('/karte?fit');
           },
         },

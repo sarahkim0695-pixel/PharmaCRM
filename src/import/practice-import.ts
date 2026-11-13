@@ -7,18 +7,18 @@
  * Optional: Öffnungszeiten (eine Spalte „Öffnungszeiten“ ODER Spalten „Mo“, „Di“ …),
  * „Parken (Min)“ und „Vor Ort (Min)“ für den Zeitaufwand bei der Tourplanung.
  *
- * Kliniken: Spalte „Typ“ (Praxis/Klinik) ODER eigenes Tabellenblatt „Kliniken“ –
- * alle Blätter mit passender Kopfzeile werden eingelesen. Ohne Angabe wird die
- * Art am Namen erkannt („Klinik“, „Klinikum“, „Krankenhaus“).
+ * Gruppen (Orthopäden, Hausärzte, Zahnärzte & KFO, Kliniken): Spalte „Typ“, Name des
+ * Tabellenblatts, Fachrichtung oder Name – siehe detectKind() in utils/kind.ts.
+ * Alle Blätter mit passender Kopfzeile werden eingelesen.
  * Doppelte Zeilen (gleicher Name + gleiche Adresse) werden übersprungen.
  *
  * Gelb hinterlegte Zeilen werden als „prüfen“ markiert.
  * Bei einem erneuten Import werden vorhandene Praxen aktualisiert (Besuche,
  * Produkte und Pins bleiben erhalten), neue kommen hinzu.
  */
-import { parseDayCell, parseOpeningHours } from '../tour/opening-hours';
+import { detectHoursLayout, readHours, type HoursLayout } from './hours-import';
 import type { FacilityKind, Practice, WeekHours } from '../types';
-import { detectKind, kindOf, type KindSource } from '../utils/kind';
+import { detectKind, KIND_KEYS, kindOf, type KindSource } from '../utils/kind';
 import { parseInterval } from '../utils/customer';
 import { newId, nowIso } from '../utils/id';
 import { normalize, normalizePlz, normalizeStreet } from '../utils/text';
@@ -56,18 +56,6 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   kind: ['typ', 'art', 'einrichtungsart', 'einrichtungstyp', 'kategorie', 'praxisklinik', 'praxisoderklinik', 'typpraxisklinik'],
 };
 
-/** Spaltenüberschriften für einzelne Wochentage (Index 0 = Montag) */
-const DAY_HEADERS = [
-  ['mo', 'montag'],
-  ['di', 'dienstag'],
-  ['mi', 'mittwoch'],
-  ['do', 'donnerstag'],
-  ['fr', 'freitag'],
-  ['sa', 'samstag'],
-  ['so', 'sonntag'],
-];
-
-/** „Parken (Min.)“ → „parken“ – ohne Leer-/Sonderzeichen und Einheit */
 function compactHeader(raw: string): string {
   return normalize(raw)
     .replace(/[^a-z0-9]/g, '')
@@ -86,7 +74,7 @@ export const FIELD_LABELS: Record<Field, string> = {
   hours: 'Öffnungszeiten',
   park: 'Parken (Min)',
   visit: 'Vor Ort (Min)',
-  kind: 'Typ (Praxis/Klinik)',
+  kind: 'Typ (z. B. Hausarzt, Zahnarzt, Klinik)',
   interval: 'Intervall',
 };
 
@@ -110,6 +98,8 @@ export interface ImportRow {
   openingText?: string;
   /** Öffnungszeiten standen da, waren aber nicht lesbar */
   hoursUnreadable?: boolean;
+  /** Öffnungszeiten stammen aus dem Hinweis */
+  hoursFromHint?: boolean;
   parkMinutes?: number;
   visitMinutes?: number;
   visitIntervalDays?: number;
@@ -130,7 +120,10 @@ export interface ImportPreview {
   headerRowNumber: number;
   columns: Partial<Record<Field, number>>;
   /** Spalten je Wochentag (falls vorhanden) */
-  dayColumns: (number | undefined)[];
+  /** Woher die Öffnungszeiten kommen (für die Vorschau) */
+  hoursSources: string[];
+  /** Öffnungszeiten aus dem Hinweis übernommen (keine eigene Spalte) */
+  hoursFromHint: number;
   missingColumns: Field[];
   rows: ImportRow[];
   skippedRows: number;
@@ -167,13 +160,9 @@ export function detectColumns(header: string[]): Partial<Record<Field, number>> 
   return cols;
 }
 
-/** Findet Spalten „Mo“ … „So“ bzw. „Montag“ … „Sonntag“. */
+/** Erste Spalte je Wochentag („Mo“ … „So“, „Montag“, „Mo vormittags“ …) – siehe hours-import.ts */
 export function detectDayColumns(header: string[]): (number | undefined)[] {
-  const compact = header.map(compactHeader);
-  return DAY_HEADERS.map((names) => {
-    const idx = compact.findIndex((h) => names.includes(h));
-    return idx >= 0 ? idx : undefined;
-  });
+  return detectHoursLayout(header).dayCols.map((cols) => cols[0]?.idx);
 }
 
 /** „15“, „15 min“, „1,5 h“ → Minuten */
@@ -206,7 +195,9 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
   const parts = sheets
     .map((sheet) => {
       const found = findHeader(sheet);
-      return found ? readRows(sheet, found.headerIdx, found.columns, detectDayColumns(found.header)) : null;
+      if (!found) return null;
+      const taken = new Set(Object.entries(found.columns).filter(([f]) => f !== 'hours').map(([, i]) => i as number));
+      return readRows(sheet, found.headerIdx, found.columns, detectHoursLayout(found.header, taken));
     })
     .filter((x): x is ReturnType<typeof readRows> => !!x);
   if (!parts.length) {
@@ -244,7 +235,8 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
     sheetName: firstPart.sheetName,
     headerRowNumber: firstPart.headerRowNumber,
     columns: firstPart.columns,
-    dayColumns: firstPart.dayColumns,
+    hoursSources: [...new Set(parts.flatMap((p) => p.hoursLayout.labels))],
+    hoursFromHint: rows.filter((r) => r.hoursFromHint).length,
     missingColumns: required.filter((f) => firstPart.columns[f] === undefined),
     rows,
     skippedRows: parts.reduce((n, p) => n + p.skipped, 0),
@@ -253,21 +245,33 @@ export function parsePracticeSheets(sheets: SheetData[]): ImportPreview {
     hoursCount: rows.filter((r) => r.openingHours).length,
     hoursProblems: parts.flatMap((p) => p.hoursProblems),
     duplicateRows,
-    kindCounts: {
-      praxis: rows.filter((r) => r.kind === 'praxis').length,
-      klinik: rows.filter((r) => r.kind === 'klinik').length,
-    },
+    kindCounts: countKinds(rows),
   };
 }
+
+/** Anzahl Zeilen je Gruppe */
+export function countKinds(rows: Pick<ImportRow, 'kind'>[]): Record<FacilityKind, number> {
+  const out = Object.fromEntries(KIND_KEYS.map((k) => [k, 0])) as Record<FacilityKind, number>;
+  for (const r of rows) out[r.kind]++;
+  return out;
+}
+
+/** „Alle Einträge dieser Datei sind …“: Gruppe für alle Zeilen festlegen */
+export function withKind(rows: ImportRow[], kind: FacilityKind): ImportRow[] {
+  return rows.map((r) => ({ ...r, kind, kindSource: 'file' }));
+}
+
+/** Gruppe nur speichern, wenn sie eindeutig angegeben ist – sonst ergibt sie sich aus der Fachrichtung */
+const explicitKind = (row: ImportRow) =>
+  row.kindSource === 'file' || row.kindSource === 'column' || row.kindSource === 'sheet' || row.kind === 'klinik';
 
 function readRows(
   sheet: SheetData,
   headerIdx: number,
   columns: Partial<Record<Field, number>>,
-  dayColumns: (number | undefined)[],
+  hoursLayout: HoursLayout,
 ) {
   const usedCols = Object.values(columns) as number[];
-  const hasDayColumns = dayColumns.some((c) => c !== undefined);
   const hoursProblems: ImportPreview['hoursProblems'] = [];
   const rows: ImportRow[] = [];
   let skipped = 0;
@@ -282,7 +286,7 @@ function readRows(
     }
     const yellow =
       isYellow(sheet.rowFills[r]) || usedCols.some((c) => isYellow(cells[c]?.fill));
-    const kind = detectKind(name, get('kind'), sheet.name);
+    const kind = detectKind(name, get('kind'), sheet.name, get('specialty'));
     const row: ImportRow = {
       rowNumber: r + 1,
       sheetName: sheet.name,
@@ -302,31 +306,19 @@ function readRows(
       visitIntervalDays: columns.interval !== undefined ? parseInterval(cells[columns.interval]?.value) : undefined,
     };
 
-    // Öffnungszeiten: eine Textspalte …
-    const hoursText = get('hours');
-    if (hoursText) {
-      const parsed = parseOpeningHours(hoursText);
-      row.openingText = hoursText;
-      if (parsed.hours) row.openingHours = parsed.hours;
-      else {
-        row.hoursUnreadable = true;
-        hoursProblems.push({ rowNumber: row.rowNumber, name, text: hoursText });
-      }
-    } else if (hasDayColumns) {
-      // … oder je Wochentag eine Spalte
-      const days = dayColumns.map((c) => (c !== undefined ? parseDayCell(cellText(cells[c]?.value)) : undefined));
-      if (days.some((d) => d !== undefined)) {
-        row.openingHours = days.map((d) => d ?? []);
-        row.openingText = dayColumns
-          .map((c, i) => (c !== undefined && cellText(cells[c]?.value) ? `${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][i]} ${cellText(cells[c]?.value)}` : ''))
-          .filter(Boolean)
-          .join('; ');
-      }
+    // Öffnungszeiten: Textspalte(n), Spalten je Wochentag oder (ohne eigene Spalte) der Hinweis
+    const hours = readHours(cells, hoursLayout, row.hint);
+    if (hours.text) row.openingText = hours.text;
+    if (hours.hours) row.openingHours = hours.hours;
+    if (hours.fromHint) row.hoursFromHint = true;
+    if (hours.unreadable) {
+      row.hoursUnreadable = true;
+      hoursProblems.push({ rowNumber: row.rowNumber, name, text: hours.unreadable });
     }
     rows.push(row);
   }
 
-  return { sheetName: sheet.name, headerRowNumber: headerIdx + 1, columns, dayColumns, rows, skipped, hoursProblems };
+  return { sheetName: sheet.name, headerRowNumber: headerIdx + 1, columns, hoursLayout, rows, skipped, hoursProblems };
 }
 
 // ---------- Zusammenführen mit vorhandenen Daten ----------
@@ -349,7 +341,7 @@ export function newPracticeFromRow(row: ImportRow): Practice {
   const ts = nowIso();
   return {
     id: newId(),
-    kind: row.kind,
+    ...(explicitKind(row) ? { kind: row.kind } : {}),
     name: row.name,
     specialty: row.specialty,
     street: row.street,
@@ -420,8 +412,9 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       needsReview: row.needsReview,
       // leere Zellen überschreiben nichts, was in der App gepflegt wurde
       ...timeFields(row),
-      // Art nur bei eindeutiger Angabe ändern (Spalte, Blatt, Name)
-      kind: row.kindSource === 'default' || (row.kind === 'praxis' && !match.kind) ? match.kind : row.kind,
+      // Gruppe nur bei eindeutiger Angabe ändern (Auswahl beim Import, Spalte, Blatt, Klinik im Namen);
+      // sonst bleibt eine in der App gewählte Gruppe – der alte Wert „praxis“ wird aus der Fachrichtung erkannt
+      kind: explicitKind(row) ? row.kind : match.kind === 'praxis' ? undefined : match.kind,
     };
     if (next.kind === undefined) delete next.kind;
     // Kundenstatus: In der App gesetzt bleibt er, bis sich der Status in der Excel ändert
@@ -432,9 +425,9 @@ export function mergeImport(existing: Practice[], rows: ImportRow[]): MergeResul
       delete next.lng;
       delete next.geoLabel;
     }
-    const changed = (Object.keys(next) as (keyof Practice)[]).some(
-      (k) => JSON.stringify(next[k]) !== JSON.stringify(match[k]),
-    );
+    // auch entfernte Felder zählen als Änderung (z. B. alter Wert „praxis“)
+    const keys = new Set([...Object.keys(next), ...Object.keys(match)] as (keyof Practice)[]);
+    const changed = [...keys].some((k) => JSON.stringify(next[k]) !== JSON.stringify(match[k]));
     if (changed) {
       toSave.push(next);
       updated++;
