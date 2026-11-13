@@ -75,6 +75,20 @@ export interface PlanOptions {
 
 export class PlanError extends Error {}
 
+/**
+ * Tour berechnen und automatisch vorgeschlagene Praxen, die nicht mehr hineinpassen,
+ * wieder herausnehmen. Ändert `tour` (Stopps + Plan).
+ */
+export async function planTour(tour: Tour, opts: PlanOptions = {}): Promise<{ removed: string[] }> {
+  const plan = await computePlan(tour, opts);
+  const notFitting = new Set(plan.dropped.map((d) => d.practiceId));
+  const removed = tour.stops.filter((s) => s.suggested && notFitting.has(s.practiceId)).map((s) => s.practiceId);
+  tour.stops = tour.stops.filter((s) => !removed.includes(s.practiceId)).map(({ suggested: _s, ...rest }) => rest);
+  plan.dropped = plan.dropped.filter((d) => !removed.includes(d.practiceId));
+  tour.plan = plan;
+  return { removed };
+}
+
 /** Berechnet den Tagesplan einer Tour (fragt dazu die Fahrzeiten ab). */
 export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<TourPlan> {
   const settings = store.settings;

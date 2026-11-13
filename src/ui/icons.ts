@@ -8,6 +8,7 @@ const paths: Record<string, string> = {
   more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   back: '<path d="M15 18 9 12l6-6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   route: '<path d="M3 11 21 3l-8 18-2-8-8-2Z"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13 7 4 4"/>',

@@ -8,7 +8,7 @@ import { filterContext } from '../state/selectors';
 import { store } from '../state/store';
 import { practiceDurations } from '../tour/durations';
 import { formatRanges, formatTime, hoursOn, parseTime } from '../tour/opening-hours';
-import { addAppointments, appointmentOn, computePlan, newTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
+import { addAppointments, appointmentOn, newTour, planTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
 import { KIND_KEYS, KIND_PLURAL, kindOf } from '../utils/kind';
 import { ROUTING_ATTRIBUTION, type LatLng } from '../tour/travel';
 import type { FacilityKind, PlanEntry, Practice, Tour } from '../types';
@@ -19,6 +19,7 @@ import { toast } from '../ui/toast';
 import { dueInfo, dueText, practiceColor, STATE_LABEL, stateKeyOf } from '../utils/customer';
 import { packingList } from '../tour/packing';
 import { eventsToAsk } from './events-view';
+import { openVoicePlanner } from './voice-sheet';
 import { formatDateShort, parseDate, todayStr } from '../utils/dates';
 import { appleMapsUrl } from '../utils/maps';
 import { collator, normalize, plural } from '../utils/text';
@@ -130,13 +131,8 @@ export function tourView(route: Route): View {
     render();
     try {
       const position = tour.startMode === 'here' || opts.fromMinutes !== undefined ? await getPosition() : null;
-      const plan = await computePlan(tour, { ...opts, position });
-      // Automatisch vorgeschlagene Praxen, die nicht passen, wieder herausnehmen
-      const notFitting = new Set(plan.dropped.map((d) => d.practiceId));
-      const removed = tour.stops.filter((s) => s.suggested && notFitting.has(s.practiceId)).map((s) => s.practiceId);
-      tour.stops = tour.stops.filter((s) => !removed.includes(s.practiceId)).map(({ suggested: _s, ...rest }) => rest);
-      plan.dropped = plan.dropped.filter((d) => !removed.includes(d.practiceId));
-      tour.plan = plan;
+      // Automatisch vorgeschlagene Praxen, die nicht passen, nimmt planTour wieder heraus
+      const { removed } = await planTour(tour, { ...opts, position });
       await persist();
       if (removed.length) toast(`${plural(removed.length, 'Vorschlag passte', 'Vorschläge passten')} nicht mehr hinein`);
     } catch (err) {
@@ -168,6 +164,30 @@ export function tourView(route: Route): View {
         sub: longDate(date),
         actions: plan ? h('button', { class: 'btn btn-sm', onclick: () => navigate(`/karte/tour/${date}`) }, iconEl('map', 18), 'Karte') : null,
       }),
+      h(
+        'button',
+        {
+          class: 'btn btn-block voice-open',
+          onclick: () =>
+            openVoicePlanner({
+              currentDate: date,
+              getPosition,
+              onDone: (r) => {
+                if (r.date === date) {
+                  tour = structuredClone(store.tours.get(date) ?? newTour(date));
+                  error = r.error ?? '';
+                  render();
+                } else {
+                  navigate(`/tour/${r.date}`);
+                }
+                toast(r.summary, { duration: 7000, kind: r.error ? 'info' : 'success' });
+                if (r.error) toast(r.error, { kind: 'error', duration: 7000 });
+              },
+            }),
+        },
+        iconEl('mic', 24),
+        h('span', null, h('b', null, 'Per Sprache planen'), h('small', null, 'z. B. „Morgen Tour in Augsburg, Dr. Huber um 10 fest, Rest auffüllen“')),
+      ),
       dayCard(upcoming),
       frameCard(),
       regionCard(),
