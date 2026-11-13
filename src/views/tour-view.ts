@@ -6,7 +6,7 @@ import { navigate, type Route } from '../router';
 import { distanceKm, filterState, isStale } from '../state/filters';
 import { filterContext } from '../state/selectors';
 import { store } from '../state/store';
-import { practiceDurations } from '../tour/durations';
+import { formatMinutes, stepVisit, stopDurations } from '../tour/durations';
 import { formatRanges, formatTime, hoursOn, parseTime } from '../tour/opening-hours';
 import { addAppointments, appointmentOn, newTour, planTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
 import { KIND_KEYS, KIND_PLURAL, kindOf } from '../utils/kind';
@@ -303,8 +303,28 @@ export function tourView(route: Route): View {
               const p = store.getPractice(s.practiceId);
               if (!p) return null;
               const ht = hoursText(p, date);
-              const dur = practiceDurations(p);
+              const dur = stopDurations(p, s);
               const num = order.get(p.id);
+              const setVisit = (minutes: number | undefined) =>
+                change((t) => {
+                  const x = t.stops.find((y) => y.practiceId === p.id);
+                  if (!x) return;
+                  if (minutes === undefined || minutes === dur.standardVisit) delete x.visitMinutes;
+                  else x.visitMinutes = minutes;
+                });
+              // Neue Zeile: Dauer vor Ort für diesen Besuch (z. B. längerer Termin)
+              const visitRow = h(
+                'div',
+                { class: ['stop-visit', dur.longer && 'longer'] },
+                iconEl('clock', 18),
+                h('span', { class: 'stop-visit-label' }, 'Vor Ort'),
+                h('button', { class: 'step-btn', 'aria-label': `Kürzer bei ${p.name}`, disabled: dur.visit <= 5, onclick: () => setVisit(stepVisit(dur.visit, -1)) }, '−'),
+                h('span', { class: 'stop-visit-value', 'aria-live': 'polite' }, formatMinutes(dur.visit)),
+                h('button', { class: 'step-btn', 'aria-label': `Länger bei ${p.name}`, disabled: dur.visit >= 240, onclick: () => setVisit(stepVisit(dur.visit, 1)) }, '+'),
+                dur.longer
+                  ? h('button', { class: 'link-btn', onclick: () => setVisit(undefined) }, `Standard (${formatMinutes(dur.standardVisit)})`)
+                  : h('span', { class: 'muted small' }, 'Standard'),
+              );
               const due = dueInfo(p, store.lastVisit(p.id)?.date, store.settings, parseDate(date));
               const bring = h('input', {
                 class: 'bring-input',
@@ -348,6 +368,7 @@ export function tourView(route: Route): View {
                   ),
                   h('button', { class: 'icon-btn', 'aria-label': 'Aus der Tour entfernen', onclick: () => change((t) => (t.stops = t.stops.filter((y) => y.practiceId !== p.id))) }, iconEl('close', 20)),
                 ),
+                visitRow,
                 h('div', { class: 'stop-bring' }, iconEl('box', 18), bring),
               );
             }),
@@ -548,7 +569,8 @@ export function tourView(route: Route): View {
             h('div', { class: 'tl-title' }, h('span', { class: 'stop-num', style: { background: practiceColor(p, store.settings) } }, String(num)), h('a', { href: `#/praxis/${p.id}` }, p.name)),
             h('div', { class: 'prow-sub' }, [p.specialty, p.city].filter(Boolean).join(' · ')),
             h('div', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
-            h('div', { class: 'tl-meta' }, `Ankunft ${formatTime(e.arrive)} · ${e.park} min Parken & Weg`),
+            h('div', { class: 'tl-meta' }, `Ankunft ${formatTime(e.arrive)} · ${e.park} min Parken & Weg · ${formatMinutes(e.end - e.start)} vor Ort`,
+              tour.stops.find((x) => x.practiceId === p.id)?.visitMinutes !== undefined ? h('span', { class: 'badge badge-due' }, 'länger eingeplant') : null),
             (() => {
               const bring = tour.stops.find((x) => x.practiceId === p.id)?.bring;
               return bring ? h('div', { class: 'tl-bring' }, `🎒 Mitbringen: ${bring}`) : null;

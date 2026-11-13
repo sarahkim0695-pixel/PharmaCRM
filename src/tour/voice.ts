@@ -32,6 +32,8 @@ export interface FixedVisit extends PracticeRef {
   time?: number;
   /** „wenn es passt“ → optional statt fest */
   optional?: boolean;
+  /** „dauert eine Stunde“ → Zeit vor Ort für diesen Besuch */
+  minutes?: number;
 }
 
 export interface VoiceCommand {
@@ -102,6 +104,10 @@ function digitize(w: string): string {
     .replace(/\bdreiviertel stunde\b/g, '45 minuten')
     .replace(/\banderthalb stunden\b/g, '90 minuten');
   s = s.replace(/\b[a-z]+\b/g, (word) => (NUMBER_WORDS[word] !== undefined ? String(NUMBER_WORDS[word]) : word));
+  // „2 Stunden“ → „120 minuten“, „1,5 Stunden“ → „90 minuten“
+  s = s
+    .replace(/\b(\d{1,2})[,.]5\s*stunden?\b/g, (_, n) => `${Number(n) * 60 + 30} minuten`)
+    .replace(/\b(\d{1,2})\s*stunden?\b/g, (_, n) => `${Number(n) * 60} minuten`);
   // „halb neun“ = 8:30, „viertel nach acht“ = 8:15, „viertel vor neun“ = 8:45,
   // bayerisch „viertel neun“ = 8:15, „dreiviertel neun“ = 8:45
   const hm = (h: number, m: number) => `${h}:${String(m).padStart(2, '0')} uhr`;
@@ -386,6 +392,8 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
   const mentionedCities: string[] = [];
   let pendingItems = '';
   let sawPlanWord = false;
+  /** Was der vorige Teilsatz war – für „…, 30 Minuten“ / „…, dauert eine Stunde“ */
+  let prevClause: 'lunch' | 'fixed' | 'other' = 'other';
 
   const clauses = splitClauses(text);
   for (let ci = 0; ci < clauses.length; ci++) {
@@ -620,15 +628,27 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
         // Uhrzeit hinter dem Namen (bis zum nächsten Namen) gehört zu dieser Praxis
         const nextStart = clausePractices[i + 1]?.hit.start ?? Infinity;
         const t = times.find((x) => x.start >= hit.end && x.start < nextStart) ?? (clausePractices.length === 1 ? times[0] : undefined);
-        cmd.fixed.push({ ...r, time: t?.minutes, optional: optional || undefined });
+        // „Dr. Huber 90 Minuten“, „bei Dr. Huber eine Stunde einplanen“ → Zeit vor Ort
+        const durRe = /\b(\d{1,3})\s*(min|minuten)\b/g;
+        const dur = [...w.matchAll(durRe)].find((m) => m.index! >= hit.end && m.index! < nextStart) ?? (clausePractices.length === 1 ? [...w.matchAll(durRe)][0] : undefined);
+        cmd.fixed.push({ ...r, time: t?.minutes, optional: optional || undefined, minutes: dur ? Number(dur[1]) : undefined });
         if (t) consume(t.start, t.end);
+        if (dur) consume(dur.index!, dur.index! + dur[0].length);
       });
+      understood = true;
+    }
+
+    // „…, dauert eine Stunde“ direkt nach einer Praxis → Zeit vor Ort für diesen Besuch
+    const loneVisit = w.match(/^\s*(?:(?:dauert|dauer|braucht|brauche|einplanen|eingeplant|zeit|vor ort|etwa|ca|ungefahr|bitte|mit|fur)\s+)*(\d{1,3})\s*(min|minuten)\b(?:\s+(?:einplanen|vor ort|dauer|zeit|lang|bleiben))*\s*$/);
+    if (loneVisit && prevClause === 'fixed' && !clausePractices.length && cmd.fixed.length) {
+      cmd.fixed[cmd.fixed.length - 1].minutes = Number(loneVisit[1]);
+      consume(0, w.length);
       understood = true;
     }
 
     // „…, 30 Minuten“ direkt nach der Mittagspause
     const lone = w.match(/^\s*(\d{1,3})\s*(min|minuten)\s*$/);
-    if (lone && cmd.lunch?.enabled) {
+    if (lone && cmd.lunch?.enabled && prevClause === 'lunch') {
       const minutes = Number(lone[1]);
       if (cmd.lunch.from !== undefined && cmd.lunch.to !== undefined && cmd.lunch.to - cmd.lunch.from === (cmd.lunch.minutes ?? 0)) {
         cmd.lunch.to = cmd.lunch.from + minutes; // feste Pause: Ende verschieben
@@ -658,6 +678,7 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
     }
     if (planWord) sawPlanWord = true;
     cmd.unknown.push(...rest);
+    prevClause = lunchWord ? 'lunch' : clausePractices.length && !clausePractices.every(({ hit }) => negatedAt(hit.start, hit.end)) ? 'fixed' : prevClause === 'fixed' && loneVisit ? 'fixed' : 'other';
   }
   if (pendingItems) cmd.unknown.push(...words(pendingItems).filter((x) => !VOCAB.has(x)));
 

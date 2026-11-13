@@ -77,13 +77,15 @@ export async function applyVoiceCommand(
     const p = store.getPractice(f.practiceId);
     if (!p) continue;
     if (f.time !== undefined) await store.savePractice({ ...p, nextAppointment: `${date}T${formatTime(f.time)}` });
-    const stop = tour.stops.find((s) => s.practiceId === p.id);
+    let stop = tour.stops.find((s) => s.practiceId === p.id);
     if (stop) {
       stop.must = !f.optional;
       delete stop.suggested;
     } else {
-      tour.stops.push({ practiceId: p.id, must: !f.optional });
+      stop = { practiceId: p.id, must: !f.optional };
+      tour.stops.push(stop);
     }
+    if (f.minutes !== undefined) stop.visitMinutes = f.minutes;
   }
   addAppointments(tour);
 

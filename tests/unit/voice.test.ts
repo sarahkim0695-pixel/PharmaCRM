@@ -105,6 +105,18 @@ describe('Sprachsteuerung – Verstehen', () => {
     ]);
   });
 
+  it('längere Zeit vor Ort für einen Besuch', () => {
+    expect(run('Dr. Huber um 10 Uhr fest, dauert eine Stunde').fixed).toMatchObject([{ practiceId: 'huber', time: 600, minutes: 60 }]);
+    expect(run('bei Dr. Lang 90 Minuten einplanen').fixed).toMatchObject([{ practiceId: 'lang', minutes: 90 }]);
+    expect(run('Dr. Huber anderthalb Stunden').fixed).toMatchObject([{ practiceId: 'huber', minutes: 90 }]);
+    const c = run('Dr. Huber um 9 und Dr. Lang um 11 für 2 Stunden');
+    expect(c.fixed).toMatchObject([{ practiceId: 'huber', time: 540 }, { practiceId: 'lang', time: 660, minutes: 120 }]);
+    expect(c.fixed[0].minutes).toBeUndefined();
+    expect(c.unknown).toEqual([]);
+    // Minuten nach der Mittagspause gehören weiter zur Pause
+    expect(run('Dr. Huber fest, Mittagspause halb eins, 30 Minuten').fixed[0].minutes).toBeUndefined();
+  });
+
   it('Praxen weglassen', () => {
     expect(run('Tour in Kempten ohne Praxis Allgäu').exclude).toMatchObject([{ practiceId: 'allgaeu' }]);
     expect(run('Lass Dr. Lang weg').exclude).toMatchObject([{ practiceId: 'lang' }]);

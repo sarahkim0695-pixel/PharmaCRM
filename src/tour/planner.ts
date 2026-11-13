@@ -10,7 +10,7 @@ import { dueInfo, dueText, STATE_LABEL, stateKeyOf, type StateKey } from '../uti
 import { parseDate } from '../utils/dates';
 import { normalize } from '../utils/text';
 import { nowIso } from '../utils/id';
-import { practiceDurations } from './durations';
+import { stopDurations } from './durations';
 import { hoursOn } from './opening-hours';
 import { optimizeTour, type OptStop } from './optimizer';
 import { routeGeometry, travelMatrix, type LatLng } from './travel';
@@ -113,7 +113,7 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
       dropped.push({ practiceId: p.id, reason: 'Kein Standort – bitte Pin setzen' });
       continue;
     }
-    const dur = practiceDurations(p);
+    const dur = stopDurations(p, s);
     const appt = appointmentOn(p, tour.date);
     let windows: TimeRange[];
     if (typeof appt === 'number') {

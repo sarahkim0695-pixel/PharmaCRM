@@ -171,6 +171,8 @@ export interface TourStop {
   suggested?: boolean;
   /** Was ich zu diesem Besuch mitbringen möchte (nur für diesen Tag) */
   bring?: string;
+  /** Zeit vor Ort für diesen Besuch in Minuten (nur für diesen Tag – überschreibt den Standard der Praxis) */
+  visitMinutes?: number;
 }
 
 export interface Tour {

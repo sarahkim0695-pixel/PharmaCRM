@@ -536,6 +536,21 @@ try {
   await page.waitForSelector('.toast:has-text("Tour für Donnerstag")');
   await shot('27c-sprache-ergebnis');
 
+  // 28. Längerer Termin: Dauer vor Ort bei einem Besuch erhöhen (nur für diesen Tag)
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  const visitRow = page.locator('.stop-visit').first();
+  const before = await visitRow.locator('.stop-visit-value').innerText();
+  for (let i = 0; i < 3; i++) await visitRow.locator('.step-btn').last().click();
+  await page.waitForFunction((b) => document.querySelector('.stop-visit .stop-visit-value')?.textContent !== b, before);
+  await page.waitForSelector('.stop-visit.longer .link-btn:has-text("Standard")');
+  const longer = await page.locator('.stop-visit.longer .stop-visit-value').first().innerText();
+  await page.getByRole('button', { name: /Tour berechnen|Neu berechnen/ }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  await page.waitForSelector('.tl-visit .badge:has-text("länger eingeplant")');
+  assert.match(await page.locator('.tl-visit', { hasText: 'länger eingeplant' }).first().innerText(), new RegExp(`${longer} vor Ort`));
+  await page.locator('.stop-visit.longer').first().scrollIntoViewIfNeeded();
+  await shot('28-laengerer-termin');
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } catch (err) {

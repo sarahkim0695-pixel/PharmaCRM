@@ -70,6 +70,15 @@ describe('Sprach-Auftrag ausführen', () => {
     expect(store.settings.activeTourDate).toBe('2026-11-17');
   });
 
+  it('„dauert eine Stunde“ verlängert nur diesen Besuch', async () => {
+    await applyVoiceCommand(cmd('Donnerstag Dr. Huber um 10 Uhr fest, dauert eine Stunde'), { currentDate: '2026-11-20', getPosition: async () => null });
+    const tour = store.tours.get('2026-11-19')!;
+    expect(tour.stops.find((s) => s.practiceId === 'huber')).toMatchObject({ must: true, visitMinutes: 60 });
+    const visit = tour.plan!.entries.find((e) => e.kind === 'visit' && e.practiceId === 'huber');
+    expect(visit && visit.kind === 'visit' && visit.end - visit.start).toBe(60);
+    expect(store.getPractice('huber')!.visitMinutes).toBeUndefined();
+  });
+
   it('auch Hausärzte, nur Startlöcher', async () => {
     await applyVoiceCommand(cmd('Mittwoch in Augsburg auch Hausärzte, nur Kunden in den Startlöchern'), { currentDate: '2026-11-20', getPosition: async () => null });
     const tour = store.tours.get('2026-11-18')!;

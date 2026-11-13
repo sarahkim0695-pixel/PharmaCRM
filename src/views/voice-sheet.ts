@@ -9,6 +9,7 @@
  */
 import { store } from '../state/store';
 import { formatTime } from '../tour/opening-hours';
+import { formatMinutes } from '../tour/durations';
 import { applyVoiceCommand, type VoiceResult } from '../tour/voice-apply';
 import { interpretCommand, isEmpty, type PracticeRef, type VoiceCommand } from '../tour/voice';
 import type { LatLng } from '../tour/travel';
@@ -208,6 +209,7 @@ export function openVoicePlanner(opts: {
       const p = f.practiceId ? store.getPractice(f.practiceId) : undefined;
       const replaces = f.time !== undefined && p?.nextAppointment && !p.nextAppointment.startsWith(c.date ?? opts.currentDate) && p.nextAppointment >= new Date().toISOString().slice(0, 10);
       lines.push(item('📌', refSelect(f), f.optional ? ' – wenn es passt' : ' – fest', f.time !== undefined ? `, Termin ${formatTime(f.time)} Uhr` : '',
+        f.minutes !== undefined ? `, ${formatMinutes(f.minutes)} vor Ort` : '',
         replaces ? h('small', { class: 'muted' }, ` (ersetzt Termin am ${p!.nextAppointment!.slice(8, 10)}.${p!.nextAppointment!.slice(5, 7)}.)`) : null));
     }
     if (c.fill) lines.push(item('➕', `Mit passenden Besuchen auffüllen${c.onlyDue ? ' – nur fällige' : ''}`));
@@ -271,7 +273,7 @@ export function openVoicePlanner(opts: {
         h('ul', { class: 'bullets' },
           h('li', null, h('b', null, 'Tag: '), '„morgen“, „Dienstag“, „nächste Woche Freitag“, „am 3.12.“'),
           h('li', null, h('b', null, 'Ort: '), '„in Augsburg“, „rund um Landshut“, „im Umkreis von 20 km“'),
-          h('li', null, h('b', null, 'Praxen: '), '„Dr. Huber um 10 Uhr fest“, „Praxis am Dom wenn es passt“, „ohne Dr. Lang“'),
+          h('li', null, h('b', null, 'Praxen: '), '„Dr. Huber um 10 Uhr fest, dauert eine Stunde“, „Praxis am Dom wenn es passt“, „ohne Dr. Lang“'),
           h('li', null, h('b', null, 'Auswahl: '), '„Rest auffüllen“, „nur fällige“, „nur Orthopäden“, „auch Hausärzte“, „nur Kunden in den Startlöchern“'),
           h('li', null, h('b', null, 'Zeiten: '), '„ab 7:30 los“, „bis 16 Uhr fertig“, „Mittagspause halb eins“, „ohne Mittagspause“, „maximal 6 Besuche“'),
           h('li', null, h('b', null, 'Packliste: '), '„Muster A für Dr. Huber mitnehmen“, „Visitenkarten einpacken“, „Notiz: Parkhaus nehmen“'),

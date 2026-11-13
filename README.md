@@ -205,6 +205,7 @@ Die Veranstaltung erscheint sofort bei **allen** Praxen und Kliniken. In der Pra
    - Die Mittagspause legt sie möglichst in die Zeit, in der die Praxen ohnehin Mittag machen.
    - Was nicht mehr in den Tag passt, steht unter „Nicht eingeplant“ – mit Grund.
 4. **fest / optional**: Feste Praxen (Stecknadel-Symbol) müssen in die Tour, optionale dürfen entfallen, wenn es zeitlich nicht passt.
+   **Längerer Termin?** In der Zeile **⏱ Vor Ort** bei der Praxis mit **+** die Dauer erhöhen (bzw. mit **−** verkürzen) – 5 Minuten bis 4 Stunden. Das gilt **nur für diesen Tag**; der normale Zeitaufwand der Praxis bleibt. „Standard (… min)“ setzt zurück. Danach **Neu berechnen** – im Zeitplan steht dann „länger eingeplant“.
 5. **Nur einen Ort / eine Region wählen**: Unter „Wohin?“ einen oder mehrere Orte und einen Umkreis wählen → **Tour vorschlagen**. Die App stellt die Tour aus Praxen dort zusammen – fällige Besuche, Praxen in den Startlöchern und bestellende Kunden zuerst – und rechnet sie gleich durch.
    **Vorschläge aus**: Standardmäßig schlägt die App nur Orthopäden vor; mit den Knöpfen darüber nimmst du z. B. Hausärzte dazu. Auch unter „Praxen auswählen“ kannst du die Gruppen ein- und ausschalten.
 6. **Feste Praxen + passende Besuche**: 1–2 Praxen auswählen (z. B. ein Termin) und **Passende Besuche ergänzen** tippen. Die App sucht fällige Praxen **auf der Strecke** (wenig Umweg) und **in der Nähe** und plant so viele ein, wie in den Tag passen (höchstens die eingestellte Zahl Besuche). Auch bei einer Wartezeit hilft **Lücke füllen**.
@@ -228,7 +229,7 @@ Beispiele:
 | --- | --- |
 | Tag | „heute“, „morgen“, „übermorgen“, „Dienstag“, „nächste Woche Freitag“, „am 3.12.“, „am 5. Januar“ |
 | Ort / Umkreis | „in Augsburg“ (+10 km), „nur in Augsburg“, „rund um Landshut“ (+15 km), „im Umkreis von 20 km“ |
-| Praxen | „Dr. Huber“, „Doktor Maier“ (findet auch Meier/Meyer), „Praxis am Dom“; „um 10 Uhr“ = Termin; „wenn es passt“ = optional; „ohne …“ / „… weglassen“ |
+| Praxen | „Dr. Huber“, „Doktor Maier“ (findet auch Meier/Meyer), „Praxis am Dom“; „um 10 Uhr“ = Termin; „dauert eine Stunde“ / „90 Minuten einplanen“ = längerer Besuch; „wenn es passt“ = optional; „ohne …“ / „… weglassen“ |
 | Auswahl | „Rest auffüllen“, „nur fällige“, „nur Orthopäden“, „auch Hausärzte“, „ohne Kliniken“, „nur bestellende Kunden“ / „in den Startlöchern“ / „nicht in Kontakt“ |
 | Zeiten | „ab 7:30 los“, „bis 16 Uhr fertig“, „um 17 Uhr zuhause“, „maximal 6 Besuche“, „halb neun“, „viertel nach acht“, „dreiviertel neun“ |
 | Mittagspause | „Mittagspause halb eins“, „Mittagspause von 12:30 bis 13:15“, „zwischen 12 und 14 Uhr, 30 Minuten“, „ohne Mittagspause“ |
