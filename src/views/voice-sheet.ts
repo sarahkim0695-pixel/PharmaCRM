@@ -210,6 +210,7 @@ export function openVoicePlanner(opts: {
       const replaces = f.time !== undefined && p?.nextAppointment && !p.nextAppointment.startsWith(c.date ?? opts.currentDate) && p.nextAppointment >= new Date().toISOString().slice(0, 10);
       lines.push(item('📌', refSelect(f), f.optional ? ' – wenn es passt' : ' – fest', f.time !== undefined ? `, Termin ${formatTime(f.time)} Uhr` : '',
         f.minutes !== undefined ? `, ${formatMinutes(f.minutes)} vor Ort` : '',
+        f.buffer !== undefined ? `, ${f.buffer} min Puffer` : '',
         replaces ? h('small', { class: 'muted' }, ` (ersetzt Termin am ${p!.nextAppointment!.slice(8, 10)}.${p!.nextAppointment!.slice(5, 7)}.)`) : null));
     }
     if (c.fill) lines.push(item('➕', `Mit passenden Besuchen auffüllen${c.onlyDue ? ' – nur fällige' : ''}`));

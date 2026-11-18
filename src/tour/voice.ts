@@ -34,6 +34,8 @@ export interface FixedVisit extends PracticeRef {
   optional?: boolean;
   /** „dauert eine Stunde“ → Zeit vor Ort für diesen Besuch */
   minutes?: number;
+  /** „20 Minuten Puffer“ / „15 Minuten vorher da sein“ → Puffer vor dem Termin */
+  buffer?: number;
 }
 
 export interface VoiceBlock {
@@ -261,7 +263,7 @@ const IGNORE = new Set(
     'wenn es passt optional moglich falls eventuell vielleicht ohne kein keine keinen nicht nach hause zuhause daheim zuruck heim von ab hier ' +
     'neu nochmal besucht lange sein fertig start starten los losfahren beginn beginnen anfangen ende feierabend schluss spatestens fruh fruhestens ' +
     'zwischen wieder machen mache weg weglassen streichen raus entfernen auslassen kontakt startlochern lass lasse aus dauert dauern ' +
-    'irgendwann flexibel vormittag vormittags nachmittag nachmittags online habe hab'
+    'irgendwann flexibel vormittag vormittags nachmittag nachmittags online habe hab puffer vorher fruher dort'
   ).split(' '),
 );
 
@@ -714,13 +716,25 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
         // Uhrzeit hinter dem Namen (bis zum nächsten Namen) gehört zu dieser Praxis
         const nextStart = clausePractices[i + 1]?.hit.start ?? Infinity;
         const t = times.find((x) => x.start >= hit.end && x.start < nextStart) ?? (clausePractices.length === 1 ? times[0] : undefined);
+        // „mit 20 Minuten Puffer“, „Puffer 15 Minuten“, „30 Minuten vorher da sein“ → Puffer vor dem Termin
+        const bufRe = /\b(?:(?:mit|plus)\s+)?(\d{1,3})\s*(?:min|minuten)\s+(?:puffer|vorher|fruher)\b(?:\s+(?:da|dort)(?:\s+sein)?)?|\bpuffer\s+(?:von\s+)?(\d{1,3})\s*(?:min|minuten)?\b/g;
+        const buf = [...w.matchAll(bufRe)].find((m) => m.index! >= hit.end && m.index! < nextStart) ?? (clausePractices.length === 1 ? [...w.matchAll(bufRe)][0] : undefined);
+        if (buf) consume(buf.index!, buf.index! + buf[0].length);
         // „Dr. Huber 90 Minuten“, „bei Dr. Huber eine Stunde einplanen“ → Zeit vor Ort
         const durRe = /\b(\d{1,3})\s*(min|minuten)\b/g;
         const dur = [...w.matchAll(durRe)].find((m) => m.index! >= hit.end && m.index! < nextStart) ?? (clausePractices.length === 1 ? [...w.matchAll(durRe)][0] : undefined);
-        cmd.fixed.push({ ...r, time: t?.minutes, optional: optional || undefined, minutes: dur ? Number(dur[1]) : undefined });
+        cmd.fixed.push({ ...r, time: t?.minutes, optional: optional || undefined, minutes: dur ? Number(dur[1]) : undefined, buffer: buf ? Number(buf[1] ?? buf[2]) : undefined });
         if (t) consume(t.start, t.end);
         if (dur) consume(dur.index!, dur.index! + dur[0].length);
       });
+      understood = true;
+    }
+
+    // „…, 20 Minuten Puffer“ / „…, 15 Minuten vorher da sein“ direkt nach einer Praxis → Puffer vor dem Termin
+    const loneBuffer = w.match(/^\s*(?:(?:mit|plus|bitte)\s+)*(\d{1,3})\s*(?:min|minuten)\s+(?:puffer|vorher|fruher)\b[a-z\s]*$|^\s*(?:mit\s+)?puffer\s+(?:von\s+)?(\d{1,3})\s*(?:min|minuten)?\s*$/);
+    if (loneBuffer && prevClause === 'fixed' && !clausePractices.length && cmd.fixed.length) {
+      cmd.fixed[cmd.fixed.length - 1].buffer = Number(loneBuffer[1] ?? loneBuffer[2]);
+      consume(0, w.length);
       understood = true;
     }
 
@@ -776,7 +790,7 @@ export function interpretCommand(text: string, ctx: VoiceContext): VoiceCommand 
     }
     if (planWord) sawPlanWord = true;
     cmd.unknown.push(...rest);
-    prevClause = blockClause ? 'block' : lunchWord ? 'lunch' : clausePractices.length && !clausePractices.every(({ hit }) => negatedAt(hit.start, hit.end)) ? 'fixed' : prevClause === 'fixed' && loneVisit ? 'fixed' : 'other';
+    prevClause = blockClause ? 'block' : lunchWord ? 'lunch' : clausePractices.length && !clausePractices.every(({ hit }) => negatedAt(hit.start, hit.end)) ? 'fixed' : prevClause === 'fixed' && (loneVisit || loneBuffer) ? 'fixed' : 'other';
   }
   if (pendingItems) cmd.unknown.push(...words(pendingItems).filter((x) => !VOCAB.has(x)));
 

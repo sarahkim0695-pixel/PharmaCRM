@@ -161,6 +161,7 @@ export interface TourDefaults {
   visitMinutes: number; // Standard: Aufenthalt vor Ort
   trafficPercent: number; // Zuschlag auf die berechneten Fahrzeiten
   maxVisits: number; // höchstens so viele Besuche pro Tag
+  appointmentBuffer: number; // so viele Minuten vor einem festen Termin da sein (Puffer)
 }
 
 // ---------- Tourplanung ----------
@@ -175,6 +176,8 @@ export interface TourStop {
   bring?: string;
   /** Zeit vor Ort für diesen Besuch in Minuten (nur für diesen Tag – überschreibt den Standard der Praxis) */
   visitMinutes?: number;
+  /** Puffer vor einem festen Termin in Minuten (fehlt = Standard aus den Einstellungen) */
+  buffer?: number;
 }
 
 /** Ein Ort für Start, Ziel oder Platzhalter (z. B. Hotel, Büro) */
@@ -234,7 +237,7 @@ export interface Tour {
 export type PlanEntry =
   | { kind: 'start'; time: number; label: string }
   | { kind: 'drive'; from: number; to: number; minutes: number; km: number }
-  | { kind: 'visit'; practiceId: string; arrive: number; start: number; end: number; wait: number; park: number; fixed: boolean }
+  | { kind: 'visit'; practiceId: string; arrive: number; start: number; end: number; wait: number; park: number; fixed: boolean; buffer?: number }
   | { kind: 'break'; start: number; end: number; title?: string; blockId?: string; blockKind?: TourBlock['kind']; place?: string }
   | { kind: 'end'; time: number; label: string };
 

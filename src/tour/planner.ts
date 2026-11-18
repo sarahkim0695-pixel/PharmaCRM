@@ -178,6 +178,8 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
         must: s.must || appt !== undefined,
         // wichtigere (fällige, bestellende, Startlöcher) bleiben drin, wenn nicht alles passt
         weight: 1 + Math.min(visitPriority(p, date), 4) / 4,
+        // fester Termin: so viele Minuten früher da sein
+        buffer: typeof appt === 'number' ? (s.buffer ?? settings.tourDefaults.appointmentBuffer ?? 0) : undefined,
       },
     });
   }
@@ -209,8 +211,17 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
   const km = (a: number, b: number) => (b === 0 && separateEnd ? matrix.km[a][endIdx] : matrix.km[a][b]);
 
   const lunch = tour.lunch.enabled && dayStart < tour.lunch.to ? { from: tour.lunch.from, to: tour.lunch.to, minutes: tour.lunch.minutes } : undefined;
+  // Früher Termin (inkl. Puffer), der von der üblichen Abfahrt aus nicht zu schaffen ist → entsprechend früher losfahren
+  let departFrom = dayStart;
+  if (!replan) {
+    candidates.forEach((c, i) => {
+      const w = c.stop.windows;
+      if (!c.practice || w.length !== 1 || w[0].from !== w[0].to) return;
+      departFrom = Math.min(departFrom, w[0].from - (c.stop.buffer ?? 0) - c.stop.park - travel[0][i + 1]);
+    });
+  }
   const result = optimizeTour({
-    dayStart,
+    dayStart: departFrom,
     dayEnd: tour.dayEnd,
     returnToStart: !!endPoint,
     lunch,
@@ -248,6 +259,7 @@ export async function computePlan(tour: Tour, opts: PlanOptions = {}): Promise<T
         wait: item.wait,
         park: c.stop.park,
         fixed: c.stop.windows.length === 1 && c.stop.windows[0].from === c.stop.windows[0].to,
+        buffer: c.stop.buffer || undefined,
       });
     }
     loc = item.stop + 1;

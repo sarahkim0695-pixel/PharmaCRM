@@ -26,6 +26,14 @@ export function stepVisit(current: number, dir: 1 | -1): number {
   return [...VISIT_STEPS].reverse().find((v) => v < current) ?? current;
 }
 
+/** Auswahl für den Puffer vor festen Terminen (Minuten) */
+export const BUFFER_STEPS = [0, 5, 10, 15, 20, 25, 30, 45, 60];
+
+export function stepBuffer(current: number, dir: 1 | -1): number {
+  if (dir > 0) return BUFFER_STEPS.find((v) => v > current) ?? current;
+  return [...BUFFER_STEPS].reverse().find((v) => v < current) ?? current;
+}
+
 /** 90 → „1 Std. 30 min“ */
 export function formatMinutes(min: number): string {
   if (min < 60) return `${min} min`;

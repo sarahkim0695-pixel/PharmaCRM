@@ -6,7 +6,7 @@ import { navigate, type Route } from '../router';
 import { distanceKm, filterState, isStale } from '../state/filters';
 import { filterContext } from '../state/selectors';
 import { store } from '../state/store';
-import { formatMinutes, stepVisit, stopDurations } from '../tour/durations';
+import { formatMinutes, stepBuffer, stepVisit, stopDurations } from '../tour/durations';
 import { formatRanges, formatTime, hoursOn, parseTime } from '../tour/opening-hours';
 import { addAppointments, appointmentOn, endModeOf, newTour, planTour, suggestPractices, tourKinds, visitedOn, type PlanOptions } from '../tour/planner';
 import { KIND_KEYS, KIND_PLURAL, kindOf } from '../utils/kind';
@@ -22,7 +22,7 @@ import { eventsToAsk } from './events-view';
 import { openVoicePlanner } from './voice-sheet';
 import { blockIcon, blockTimeText, newBlock, openBlockEditor } from './block-editor';
 import { openPlacePicker } from './place-picker';
-import { formatDateShort, parseDate, todayStr } from '../utils/dates';
+import { formatDate, formatDateShort, parseDate, todayStr } from '../utils/dates';
 import { appleMapsUrl } from '../utils/maps';
 import { collator, normalize, plural } from '../utils/text';
 import { emptyState, field, pageHeader, section, type View } from './common';
@@ -395,6 +395,72 @@ export function tourView(route: Route): View {
                   ? h('button', { class: 'link-btn', onclick: () => setVisit(undefined) }, `Standard (${formatMinutes(dur.standardVisit)})`)
                   : h('span', { class: 'muted small' }, 'Standard'),
               );
+              // Neue Zeile: feste Uhrzeit (= Termin bei der Praxis) und Puffer davor
+              const appt = appointmentOn(p, date);
+              const defaultBuffer = store.settings.tourDefaults.appointmentBuffer ?? 20;
+              const buffer = s.buffer ?? defaultBuffer;
+              const setTime = async (minutes: number | null) => {
+                const current = store.getPractice(p.id) ?? p;
+                if (minutes === null) {
+                  if (!current.nextAppointment?.startsWith(date)) return;
+                  const next = { ...current };
+                  delete next.nextAppointment;
+                  delete next.nextAppointmentNote;
+                  await store.savePractice(next);
+                  change(() => undefined);
+                  return;
+                }
+                const other = current.nextAppointment && !current.nextAppointment.startsWith(date) && current.nextAppointment.slice(0, 10) >= todayStr() ? current.nextAppointment : undefined;
+                if (
+                  other &&
+                  !(await confirmDialog({
+                    title: 'Termin ersetzen?',
+                    message: `${p.name} hat schon einen Termin am ${formatDate(other.slice(0, 10))}${other.length > 10 ? ` um ${other.slice(11, 16)} Uhr` : ''}. Er wird durch den Termin am ${formatDate(date)} um ${formatTime(minutes)} Uhr ersetzt.`,
+                    confirmLabel: 'Ersetzen',
+                  }))
+                ) {
+                  render();
+                  return;
+                }
+                await store.savePractice({ ...current, nextAppointment: `${date}T${formatTime(minutes)}` });
+                change((t) => {
+                  const x = t.stops.find((y) => y.practiceId === p.id);
+                  if (x) x.must = true;
+                });
+              };
+              const setBuffer = (v: number) =>
+                change((t) => {
+                  const x = t.stops.find((y) => y.practiceId === p.id);
+                  if (!x) return;
+                  if (v === defaultBuffer) delete x.buffer;
+                  else x.buffer = v;
+                });
+              const hasTime = typeof appt === 'number';
+              const apptRow = h(
+                'div',
+                { class: ['stop-appt', hasTime && 'set'] },
+                iconEl('pin', 18),
+                h('span', { class: 'stop-visit-label' }, 'Termin'),
+                h('input', {
+                  type: 'time',
+                  step: 300,
+                  class: 'stop-time',
+                  value: hasTime ? formatTime(appt) : '',
+                  'aria-label': `Feste Uhrzeit bei ${p.name}`,
+                  onchange: (e: Event) => void setTime(parseTime((e.target as HTMLInputElement).value)),
+                }),
+                hasTime
+                  ? [
+                      h('span', { class: 'stop-buffer' },
+                        h('span', { class: 'muted small' }, 'Puffer'),
+                        h('button', { class: 'step-btn', 'aria-label': `Weniger Puffer bei ${p.name}`, disabled: buffer <= 0, onclick: () => setBuffer(stepBuffer(buffer, -1)) }, '−'),
+                        h('span', { class: 'stop-visit-value buffer-value' }, `${buffer} min`),
+                        h('button', { class: 'step-btn', 'aria-label': `Mehr Puffer bei ${p.name}`, disabled: buffer >= 60, onclick: () => setBuffer(stepBuffer(buffer, 1)) }, '+'),
+                      ),
+                      h('button', { class: 'link-btn', onclick: () => void setTime(null) }, 'keine feste Zeit'),
+                    ]
+                  : h('span', { class: 'muted small' }, appt === true ? 'Termin ohne Uhrzeit' : 'keine feste Uhrzeit'),
+              );
               const due = dueInfo(p, store.lastVisit(p.id)?.date, store.settings, parseDate(date));
               const bring = h('input', {
                 class: 'bring-input',
@@ -438,6 +504,7 @@ export function tourView(route: Route): View {
                   ),
                   h('button', { class: 'icon-btn', 'aria-label': 'Aus der Tour entfernen', onclick: () => change((t) => (t.stops = t.stops.filter((y) => y.practiceId !== p.id))) }, iconEl('close', 20)),
                 ),
+                apptRow,
                 visitRow,
                 h('div', { class: 'stop-bring' }, iconEl('box', 18), bring),
               );
@@ -649,8 +716,9 @@ export function tourView(route: Route): View {
             { class: 'tl-body' },
             h('div', { class: 'tl-title' }, h('span', { class: 'stop-num', style: { background: practiceColor(p, store.settings) } }, String(num)), h('a', { href: `#/praxis/${p.id}` }, p.name)),
             h('div', { class: 'prow-sub' }, [p.specialty, p.city].filter(Boolean).join(' · ')),
-            h('div', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
-            h('div', { class: 'tl-meta' }, `Ankunft ${formatTime(e.arrive)} · ${e.park} min Parken & Weg · ${formatMinutes(e.end - e.start)} vor Ort`,
+            e.fixed ? null : h('div', { class: ['stop-hours', `hours-${ht.kind}`] }, ht.text),
+            e.fixed ? h('div', { class: 'tl-fixed' }, `📌 Fester Termin ${formatTime(e.start)} Uhr${e.buffer ? ` · ${e.buffer} min Puffer` : ''}`) : null,
+            h('div', { class: 'tl-meta' }, `Ankunft ${formatTime(e.arrive)} · ${e.park} min Parken & Weg${e.fixed && e.buffer ? ` · bereit ${formatTime(e.arrive + e.park)}` : ''} · ${formatMinutes(e.end - e.start)} vor Ort`,
               tour.stops.find((x) => x.practiceId === p.id)?.visitMinutes !== undefined ? h('span', { class: 'badge badge-due' }, 'länger eingeplant') : null),
             (() => {
               const bring = tour.stops.find((x) => x.practiceId === p.id)?.bring;

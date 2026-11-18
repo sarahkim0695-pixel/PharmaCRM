@@ -97,5 +97,8 @@ export function tourSettingsSection(): HTMLElement {
     ),
     h('p', { class: 'muted small' }, 'Gilt für Praxen ohne eigene Angabe (Excel-Spalten „Parken (Min)“ / „Vor Ort (Min)“ oder in der Praxis unter „Öffnungszeiten & Zeitaufwand“).'),
     field('Zuschlag auf Fahrzeiten (Verkehr, %)', num(d.trafficPercent, 0, 100, (v) => update({ trafficPercent: v }))),
+    h('h3', { class: 'sheet-section' }, 'Feste Termine'),
+    field('Puffer vorher (Min)', num(d.appointmentBuffer ?? 20, 0, 120, (v) => update({ appointmentBuffer: v }))),
+    h('p', { class: 'muted small' }, 'Bei einem festen Termin plant die App so, dass du so viele Minuten früher da bist (nach Parken & Fußweg). In der Tour kannst du den Puffer je Termin ändern.'),
   );
 }

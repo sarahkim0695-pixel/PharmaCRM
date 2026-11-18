@@ -589,6 +589,28 @@ try {
   await page.locator('.tl-block').first().scrollIntoViewIfNeeded();
   await shot('29d-zeitplan');
 
+  // 30. Feste Uhrzeit bei einer Praxis + Puffer vorher
+  await page.goto(`${BASE}#/tour/${tuesday}`);
+  const firstStop = page.locator('.stop-wrap').first();
+  const stopName = (await firstStop.locator('.stop-main .prow-title').innerText()).replace(/Vorschlag/, '').trim();
+  const stopWrap = page.locator('.stop-wrap', { hasText: stopName });
+  await stopWrap.locator('.stop-appt input[type=time]').fill('10:30');
+  const replace = page.locator('dialog').getByRole('button', { name: 'Ersetzen' });
+  await replace.waitFor({ timeout: 1500 }).then(() => replace.click()).catch(() => {});
+  await stopWrap.locator('.stop-appt.set').waitFor();
+  assert.match(await stopWrap.locator('.buffer-value').innerText(), /20 min/); // Standard
+  await stopWrap.getByRole('button', { name: /Mehr Puffer/ }).click();
+  await page.waitForFunction((n) => [...document.querySelectorAll('.stop-wrap')].some((el) => el.textContent.includes(n) && el.querySelector('.buffer-value')?.textContent === '25 min'), stopName);
+  await stopWrap.scrollIntoViewIfNeeded();
+  await shot('30a-fester-termin');
+  await page.getByRole('button', { name: /Tour berechnen|Neu berechnen/ }).click();
+  await page.waitForSelector('.timeline', { timeout: 30_000 });
+  const fixedVisit = page.locator('.tl-visit', { hasText: stopName });
+  assert.match(await fixedVisit.innerText(), /📌 Fester Termin 10:30 Uhr · 25 min Puffer/);
+  assert.match(await fixedVisit.locator('.tl-time').innerText(), /10:30/);
+  await fixedVisit.scrollIntoViewIfNeeded();
+  await shot('30b-zeitplan-termin');
+
   assert.deepEqual(errors, [], `JavaScript-Fehler: ${errors.join('; ')}`);
   console.log('✔ E2E-Test erfolgreich');
 } catch (err) {

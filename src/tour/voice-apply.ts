@@ -96,6 +96,7 @@ export async function applyVoiceCommand(
       tour.stops.push(stop);
     }
     if (f.minutes !== undefined) stop.visitMinutes = f.minutes;
+    if (f.buffer !== undefined) stop.buffer = f.buffer;
   }
   addAppointments(tour);
 

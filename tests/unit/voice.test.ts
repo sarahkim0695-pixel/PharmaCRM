@@ -168,3 +168,13 @@ describe('Sprachsteuerung – Platzhalter und weitere Pausen', () => {
     expect(c.unknown).toEqual([]);
   });
 });
+
+describe('Sprachsteuerung – Puffer vor festen Terminen', () => {
+  it('„mit 30 Minuten Puffer“, „15 Minuten vorher da sein“', () => {
+    expect(run('Dr. Huber um 10 Uhr fest, mit 30 Minuten Puffer').fixed).toMatchObject([{ practiceId: 'huber', time: 600, buffer: 30 }]);
+    expect(run('Dr. Huber um 10 Uhr mit 30 Minuten Puffer').fixed).toMatchObject([{ practiceId: 'huber', time: 600, buffer: 30 }]);
+    const c = run('Dr. Lang um 11, 15 Minuten vorher da sein, dauert eine Stunde');
+    expect(c.fixed).toMatchObject([{ practiceId: 'lang', time: 660, buffer: 15, minutes: 60 }]);
+    expect(c.unknown).toEqual([]);
+  });
+});
