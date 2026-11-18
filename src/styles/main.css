@@ -639,6 +639,12 @@ button.stat:disabled { opacity: 0.6; }
 .stop-wrap .stop { border-bottom: none; }
 .stop-why { font-size: 13px; color: var(--muted); }
 .stop-main .prow-title .badge { margin-left: 6px; font-size: 11px; vertical-align: middle; }
+.stop-appt { display: flex; align-items: center; gap: 8px; padding: 0 0 6px 40px; color: var(--muted); flex-wrap: wrap; }
+.stop-appt input.stop-time { width: 130px; flex: none; min-height: 40px; padding: 4px 8px; font-size: 16px; }
+.stop-appt.set input.stop-time { border-color: var(--primary); font-weight: 700; color: var(--primary-dark); }
+.stop-buffer { display: inline-flex; align-items: center; gap: 6px; }
+.buffer-value { min-width: 60px; }
+.tl-fixed { font-weight: 700; color: var(--primary-dark); margin: 2px 0; }
 .stop-visit { display: flex; align-items: center; gap: 8px; padding: 0 0 6px 40px; color: var(--muted); flex-wrap: wrap; }
 .stop-visit-label { min-width: 52px; }
 .stop-visit-value { min-width: 84px; text-align: center; font-weight: 700; color: var(--text); font-size: 16px; }

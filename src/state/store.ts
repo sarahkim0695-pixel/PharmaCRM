@@ -27,6 +27,7 @@ export const DEFAULT_TOUR_SETTINGS: TourDefaults = {
   visitMinutes: 15,
   trafficPercent: 15,
   maxVisits: 10,
+  appointmentBuffer: 20, // bei festen Terminen ca. 20 min früher da sein
 };
 
 /**

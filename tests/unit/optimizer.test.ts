@@ -149,3 +149,12 @@ describe('Pausen und Platzhalter', () => {
     expect(r.droppedBreaks).toEqual([0]);
   });
 });
+
+describe('Puffer vor festen Terminen', () => {
+  it('ist um Puffer + Parken früher da', () => {
+    const r = optimizeTour(base({ stops: [stop({ windows: [{ from: T(10), to: T(10) }], must: true, park: 5, buffer: 20 })], travel: lineTravel([0, 30]) }));
+    const v = r.items.find((i) => i.kind === 'visit')!;
+    expect(v.kind === 'visit' && v.start).toBe(T(10));
+    expect(v.kind === 'visit' && v.arrive).toBeLessThanOrEqual(T(9, 35)); // 10:00 − 20 min Puffer − 5 min Parken
+  });
+});

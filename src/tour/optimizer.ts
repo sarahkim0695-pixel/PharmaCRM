@@ -27,6 +27,8 @@ export interface OptStop {
   weight: number;
   /** Zählt als Besuch (Höchstzahl)? false z. B. bei einem Platzhalter mit Ort */
   countsAsVisit?: boolean;
+  /** Puffer vor dem Beginn (Minuten) – z. B. 20 min früher da sein bei festen Terminen */
+  buffer?: number;
 }
 
 /** Pause oder Platzhalter ohne Ort: Zeit vergeht, der Standort bleibt */
@@ -127,7 +129,7 @@ export function simulate(input: OptInput, seq: number[], departure = input.daySt
     time += d;
     drive += d;
     const arrive = time;
-    const ready = arrive + st.park;
+    const ready = arrive + st.park + (st.buffer ?? 0);
     let start = -1;
     for (const w of st.windows) {
       if (w.to >= ready) {

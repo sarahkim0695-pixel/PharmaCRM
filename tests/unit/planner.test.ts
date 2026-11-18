@@ -210,3 +210,27 @@ describe('Start, Ziel, Pausen und Platzhalter', () => {
     expect(plan.droppedBlocks).toEqual([{ blockId: 'spaet', title: 'Abendschulung', reason: expect.stringMatching(/passt/i) }]);
   });
 });
+
+describe('Feste Termine mit Puffer', () => {
+  it('Standard-Puffer (20 min), eigener Puffer je Stopp, früher losfahren bei frühem Termin', async () => {
+    vi.stubGlobal('fetch', fakeOsrm([]));
+    await store.updateSettings({ home: { address: 'Zuhause', lat: 48.10, lng: 11.50 } });
+    await store.savePractices([
+      practice('frueh', 48.37, 10.89, { nextAppointment: '2026-11-11T08:15' }), // Augsburg – über 40 min Fahrt
+      practice('mittag', 48.14, 11.56, { nextAppointment: '2026-11-11T14:00' }),
+    ]);
+    const tour = newTour('2026-11-11');
+    addAppointments(tour);
+    tour.stops.find((s) => s.practiceId === 'mittag')!.buffer = 0;
+    const plan = await computePlan(tour);
+    const visit = (id: string) => plan.entries.find((e) => e.kind === 'visit' && e.practiceId === id) as Extract<(typeof plan.entries)[number], { kind: 'visit' }>;
+    const frueh = visit('frueh');
+    expect(frueh).toMatchObject({ start: 8 * 60 + 15, fixed: true, buffer: 20 });
+    expect(frueh.arrive + frueh.park + 20).toBeLessThanOrEqual(8 * 60 + 15);
+    expect(plan.totals.departure).toBeLessThan(8 * 60); // früher los als die übliche Abfahrt (8:00)
+    expect(plan.dropped).toEqual([]);
+    const mittag = visit('mittag');
+    expect(mittag.start).toBe(14 * 60);
+    expect(mittag.buffer).toBeUndefined(); // Puffer 0
+  });
+});
